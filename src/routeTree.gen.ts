@@ -9,61 +9,314 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutNegativacaoRouteImport } from './routes/_layout/negativacao'
+import { Route as LayoutConsultasRouteImport } from './routes/_layout/consultas'
+import { Route as LayoutConfiguracoesRouteImport } from './routes/_layout/configuracoes'
+import { Route as LayoutCobrancaRouteImport } from './routes/_layout/cobranca'
+import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutCobrancaNovoProcessoRouteImport } from './routes/_layout/cobranca/novo-processo'
+import { Route as LayoutCobrancaMeusProcessosRouteImport } from './routes/_layout/cobranca/meus-processos'
+import { Route as LayoutAdminTratativaInternaRouteImport } from './routes/_layout/admin/tratativa-interna'
+import { Route as LayoutAdminEmpreendimentoRouteImport } from './routes/_layout/admin/empreendimento'
+import { Route as LayoutAdminCvSiengeRouteImport } from './routes/_layout/admin/cv-sienge'
 
-const IndexRoute = IndexRouteImport.update({
+const LayoutRoute = LayoutRouteImport.update({
+  id: '/_layout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LayoutIndexRoute = LayoutIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutNegativacaoRoute = LayoutNegativacaoRouteImport.update({
+  id: '/negativacao',
+  path: '/negativacao',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutConsultasRoute = LayoutConsultasRouteImport.update({
+  id: '/consultas',
+  path: '/consultas',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutConfiguracoesRoute = LayoutConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutCobrancaRoute = LayoutCobrancaRouteImport.update({
+  id: '/cobranca',
+  path: '/cobranca',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutAdminRoute = LayoutAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutCobrancaNovoProcessoRoute =
+  LayoutCobrancaNovoProcessoRouteImport.update({
+    id: '/novo-processo',
+    path: '/novo-processo',
+    getParentRoute: () => LayoutCobrancaRoute,
+  } as any)
+const LayoutCobrancaMeusProcessosRoute =
+  LayoutCobrancaMeusProcessosRouteImport.update({
+    id: '/meus-processos',
+    path: '/meus-processos',
+    getParentRoute: () => LayoutCobrancaRoute,
+  } as any)
+const LayoutAdminTratativaInternaRoute =
+  LayoutAdminTratativaInternaRouteImport.update({
+    id: '/tratativa-interna',
+    path: '/tratativa-interna',
+    getParentRoute: () => LayoutAdminRoute,
+  } as any)
+const LayoutAdminEmpreendimentoRoute =
+  LayoutAdminEmpreendimentoRouteImport.update({
+    id: '/empreendimento',
+    path: '/empreendimento',
+    getParentRoute: () => LayoutAdminRoute,
+  } as any)
+const LayoutAdminCvSiengeRoute = LayoutAdminCvSiengeRouteImport.update({
+  id: '/cv-sienge',
+  path: '/cv-sienge',
+  getParentRoute: () => LayoutAdminRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof LayoutIndexRoute
+  '/admin': typeof LayoutAdminRouteWithChildren
+  '/cobranca': typeof LayoutCobrancaRouteWithChildren
+  '/configuracoes': typeof LayoutConfiguracoesRoute
+  '/consultas': typeof LayoutConsultasRoute
+  '/negativacao': typeof LayoutNegativacaoRoute
+  '/admin/cv-sienge': typeof LayoutAdminCvSiengeRoute
+  '/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
+  '/admin/tratativa-interna': typeof LayoutAdminTratativaInternaRoute
+  '/cobranca/meus-processos': typeof LayoutCobrancaMeusProcessosRoute
+  '/cobranca/novo-processo': typeof LayoutCobrancaNovoProcessoRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/admin': typeof LayoutAdminRouteWithChildren
+  '/cobranca': typeof LayoutCobrancaRouteWithChildren
+  '/configuracoes': typeof LayoutConfiguracoesRoute
+  '/consultas': typeof LayoutConsultasRoute
+  '/negativacao': typeof LayoutNegativacaoRoute
+  '/': typeof LayoutIndexRoute
+  '/admin/cv-sienge': typeof LayoutAdminCvSiengeRoute
+  '/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
+  '/admin/tratativa-interna': typeof LayoutAdminTratativaInternaRoute
+  '/cobranca/meus-processos': typeof LayoutCobrancaMeusProcessosRoute
+  '/cobranca/novo-processo': typeof LayoutCobrancaNovoProcessoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/_layout': typeof LayoutRouteWithChildren
+  '/_layout/admin': typeof LayoutAdminRouteWithChildren
+  '/_layout/cobranca': typeof LayoutCobrancaRouteWithChildren
+  '/_layout/configuracoes': typeof LayoutConfiguracoesRoute
+  '/_layout/consultas': typeof LayoutConsultasRoute
+  '/_layout/negativacao': typeof LayoutNegativacaoRoute
+  '/_layout/': typeof LayoutIndexRoute
+  '/_layout/admin/cv-sienge': typeof LayoutAdminCvSiengeRoute
+  '/_layout/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
+  '/_layout/admin/tratativa-interna': typeof LayoutAdminTratativaInternaRoute
+  '/_layout/cobranca/meus-processos': typeof LayoutCobrancaMeusProcessosRoute
+  '/_layout/cobranca/novo-processo': typeof LayoutCobrancaNovoProcessoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/cobranca'
+    | '/configuracoes'
+    | '/consultas'
+    | '/negativacao'
+    | '/admin/cv-sienge'
+    | '/admin/empreendimento'
+    | '/admin/tratativa-interna'
+    | '/cobranca/meus-processos'
+    | '/cobranca/novo-processo'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/admin'
+    | '/cobranca'
+    | '/configuracoes'
+    | '/consultas'
+    | '/negativacao'
+    | '/'
+    | '/admin/cv-sienge'
+    | '/admin/empreendimento'
+    | '/admin/tratativa-interna'
+    | '/cobranca/meus-processos'
+    | '/cobranca/novo-processo'
+  id:
+    | '__root__'
+    | '/_layout'
+    | '/_layout/admin'
+    | '/_layout/cobranca'
+    | '/_layout/configuracoes'
+    | '/_layout/consultas'
+    | '/_layout/negativacao'
+    | '/_layout/'
+    | '/_layout/admin/cv-sienge'
+    | '/_layout/admin/empreendimento'
+    | '/_layout/admin/tratativa-interna'
+    | '/_layout/cobranca/meus-processos'
+    | '/_layout/cobranca/novo-processo'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  LayoutRoute: typeof LayoutRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_layout': {
+      id: '/_layout'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof LayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_layout/': {
+      id: '/_layout/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof LayoutIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/negativacao': {
+      id: '/_layout/negativacao'
+      path: '/negativacao'
+      fullPath: '/negativacao'
+      preLoaderRoute: typeof LayoutNegativacaoRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/consultas': {
+      id: '/_layout/consultas'
+      path: '/consultas'
+      fullPath: '/consultas'
+      preLoaderRoute: typeof LayoutConsultasRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/configuracoes': {
+      id: '/_layout/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof LayoutConfiguracoesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/cobranca': {
+      id: '/_layout/cobranca'
+      path: '/cobranca'
+      fullPath: '/cobranca'
+      preLoaderRoute: typeof LayoutCobrancaRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/admin': {
+      id: '/_layout/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof LayoutAdminRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/cobranca/novo-processo': {
+      id: '/_layout/cobranca/novo-processo'
+      path: '/novo-processo'
+      fullPath: '/cobranca/novo-processo'
+      preLoaderRoute: typeof LayoutCobrancaNovoProcessoRouteImport
+      parentRoute: typeof LayoutCobrancaRoute
+    }
+    '/_layout/cobranca/meus-processos': {
+      id: '/_layout/cobranca/meus-processos'
+      path: '/meus-processos'
+      fullPath: '/cobranca/meus-processos'
+      preLoaderRoute: typeof LayoutCobrancaMeusProcessosRouteImport
+      parentRoute: typeof LayoutCobrancaRoute
+    }
+    '/_layout/admin/tratativa-interna': {
+      id: '/_layout/admin/tratativa-interna'
+      path: '/tratativa-interna'
+      fullPath: '/admin/tratativa-interna'
+      preLoaderRoute: typeof LayoutAdminTratativaInternaRouteImport
+      parentRoute: typeof LayoutAdminRoute
+    }
+    '/_layout/admin/empreendimento': {
+      id: '/_layout/admin/empreendimento'
+      path: '/empreendimento'
+      fullPath: '/admin/empreendimento'
+      preLoaderRoute: typeof LayoutAdminEmpreendimentoRouteImport
+      parentRoute: typeof LayoutAdminRoute
+    }
+    '/_layout/admin/cv-sienge': {
+      id: '/_layout/admin/cv-sienge'
+      path: '/cv-sienge'
+      fullPath: '/admin/cv-sienge'
+      preLoaderRoute: typeof LayoutAdminCvSiengeRouteImport
+      parentRoute: typeof LayoutAdminRoute
     }
   }
 }
 
+interface LayoutAdminRouteChildren {
+  LayoutAdminCvSiengeRoute: typeof LayoutAdminCvSiengeRoute
+  LayoutAdminEmpreendimentoRoute: typeof LayoutAdminEmpreendimentoRoute
+  LayoutAdminTratativaInternaRoute: typeof LayoutAdminTratativaInternaRoute
+}
+
+const LayoutAdminRouteChildren: LayoutAdminRouteChildren = {
+  LayoutAdminCvSiengeRoute: LayoutAdminCvSiengeRoute,
+  LayoutAdminEmpreendimentoRoute: LayoutAdminEmpreendimentoRoute,
+  LayoutAdminTratativaInternaRoute: LayoutAdminTratativaInternaRoute,
+}
+
+const LayoutAdminRouteWithChildren = LayoutAdminRoute._addFileChildren(
+  LayoutAdminRouteChildren,
+)
+
+interface LayoutCobrancaRouteChildren {
+  LayoutCobrancaMeusProcessosRoute: typeof LayoutCobrancaMeusProcessosRoute
+  LayoutCobrancaNovoProcessoRoute: typeof LayoutCobrancaNovoProcessoRoute
+}
+
+const LayoutCobrancaRouteChildren: LayoutCobrancaRouteChildren = {
+  LayoutCobrancaMeusProcessosRoute: LayoutCobrancaMeusProcessosRoute,
+  LayoutCobrancaNovoProcessoRoute: LayoutCobrancaNovoProcessoRoute,
+}
+
+const LayoutCobrancaRouteWithChildren = LayoutCobrancaRoute._addFileChildren(
+  LayoutCobrancaRouteChildren,
+)
+
+interface LayoutRouteChildren {
+  LayoutAdminRoute: typeof LayoutAdminRouteWithChildren
+  LayoutCobrancaRoute: typeof LayoutCobrancaRouteWithChildren
+  LayoutConfiguracoesRoute: typeof LayoutConfiguracoesRoute
+  LayoutConsultasRoute: typeof LayoutConsultasRoute
+  LayoutNegativacaoRoute: typeof LayoutNegativacaoRoute
+  LayoutIndexRoute: typeof LayoutIndexRoute
+}
+
+const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutAdminRoute: LayoutAdminRouteWithChildren,
+  LayoutCobrancaRoute: LayoutCobrancaRouteWithChildren,
+  LayoutConfiguracoesRoute: LayoutConfiguracoesRoute,
+  LayoutConsultasRoute: LayoutConsultasRoute,
+  LayoutNegativacaoRoute: LayoutNegativacaoRoute,
+  LayoutIndexRoute: LayoutIndexRoute,
+}
+
+const LayoutRouteWithChildren =
+  LayoutRoute._addFileChildren(LayoutRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  LayoutRoute: LayoutRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
