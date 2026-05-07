@@ -10,32 +10,62 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutNegativacaoRouteImport } from './routes/_layout/negativacao'
+import { Route as LayoutConsultasRouteImport } from './routes/_layout/consultas'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LayoutIndexRoute = LayoutIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutNegativacaoRoute = LayoutNegativacaoRouteImport.update({
+  id: '/negativacao',
+  path: '/negativacao',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutConsultasRoute = LayoutConsultasRouteImport.update({
+  id: '/consultas',
+  path: '/consultas',
+  getParentRoute: () => LayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof LayoutRoute
+  '/': typeof LayoutIndexRoute
+  '/consultas': typeof LayoutConsultasRoute
+  '/negativacao': typeof LayoutNegativacaoRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof LayoutRoute
+  '/consultas': typeof LayoutConsultasRoute
+  '/negativacao': typeof LayoutNegativacaoRoute
+  '/': typeof LayoutIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_layout': typeof LayoutRoute
+  '/_layout': typeof LayoutRouteWithChildren
+  '/_layout/consultas': typeof LayoutConsultasRoute
+  '/_layout/negativacao': typeof LayoutNegativacaoRoute
+  '/_layout/': typeof LayoutIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/consultas' | '/negativacao'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/_layout'
+  to: '/consultas' | '/negativacao' | '/'
+  id:
+    | '__root__'
+    | '/_layout'
+    | '/_layout/consultas'
+    | '/_layout/negativacao'
+    | '/_layout/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  LayoutRoute: typeof LayoutRoute
+  LayoutRoute: typeof LayoutRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -47,12 +77,58 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_layout/': {
+      id: '/_layout/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof LayoutIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/negativacao': {
+      id: '/_layout/negativacao'
+      path: '/negativacao'
+      fullPath: '/negativacao'
+      preLoaderRoute: typeof LayoutNegativacaoRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/consultas': {
+      id: '/_layout/consultas'
+      path: '/consultas'
+      fullPath: '/consultas'
+      preLoaderRoute: typeof LayoutConsultasRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
+interface LayoutRouteChildren {
+  LayoutConsultasRoute: typeof LayoutConsultasRoute
+  LayoutNegativacaoRoute: typeof LayoutNegativacaoRoute
+  LayoutIndexRoute: typeof LayoutIndexRoute
+}
+
+const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutConsultasRoute: LayoutConsultasRoute,
+  LayoutNegativacaoRoute: LayoutNegativacaoRoute,
+  LayoutIndexRoute: LayoutIndexRoute,
+}
+
+const LayoutRouteWithChildren =
+  LayoutRoute._addFileChildren(LayoutRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  LayoutRoute: LayoutRoute,
+  LayoutRoute: LayoutRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
