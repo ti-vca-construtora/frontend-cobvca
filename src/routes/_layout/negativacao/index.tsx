@@ -133,6 +133,7 @@ function CriarBatchForm() {
   const [enterprise, setEnterprise] = useState("");
   const [limit, setLimit] = useState("");
   const [aplicarS1, setAplicarS1] = useState(false);
+  const [aplicarCronograma, setAplicarCronograma] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () =>

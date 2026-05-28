@@ -27,7 +27,8 @@ export function AppHeader() {
 
   if (!usuario) return null;
 
-  const iniciais = usuario.nome.split(" ").map((s) => s[0]).slice(0, 2).join("");
+  const nomeSeguro = (usuario.nome || usuario.email || "Usuario").trim();
+  const iniciais = nomeSeguro.split(" ").map((s) => s[0]).slice(0, 2).join("");
 
   const handleLogout = () => {
     logout();
@@ -53,7 +54,7 @@ export function AppHeader() {
                 <AvatarFallback className="text-xs">{iniciais}</AvatarFallback>
               </Avatar>
               <div className="hidden md:flex flex-col items-start leading-none">
-                <span className="text-sm font-medium">{usuario.nome}</span>
+                <span className="text-sm font-medium">{nomeSeguro}</span>
                 <span className="text-xs text-muted-foreground">{labelPerfil[usuario.perfil] ?? usuario.perfil}</span>
               </div>
             </Button>
@@ -61,7 +62,7 @@ export function AppHeader() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
-                <span>{usuario.nome}</span>
+                <span>{nomeSeguro}</span>
                 <span className="text-xs font-normal text-muted-foreground">{usuario.email}</span>
               </div>
             </DropdownMenuLabel>

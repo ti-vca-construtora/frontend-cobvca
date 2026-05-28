@@ -8,9 +8,12 @@ interface LoginResponse {
   expiresIn: number;
   tokenType: string;
   user: {
-    id: string;
-    user_id: string;
-    full_name: string;
+    id?: string;
+    user_id?: string;
+    full_name?: string | null;
+    authUserId?: string;
+    appUserId?: string;
+    fullName?: string | null;
     email: string;
     role: Perfil;
     status: string;
@@ -27,10 +30,13 @@ interface AuthCtx {
 const Ctx = createContext<AuthCtx | null>(null);
 
 function apiUserToUsuario(u: LoginResponse["user"]): Usuario {
+  const nome =
+    (u.full_name ?? u.fullName ?? "").trim() || u.email;
+
   return {
-    id: u.id,
-    userId: u.user_id,
-    nome: u.full_name,
+    id: u.id ?? u.appUserId ?? u.authUserId ?? "",
+    userId: u.user_id ?? u.authUserId ?? u.appUserId ?? "",
+    nome,
     email: u.email,
     perfil: u.role,
   };
