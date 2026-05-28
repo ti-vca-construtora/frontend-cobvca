@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_layout/admin/cv-sienge")({ component: Cv
 
 function CvSiengePage() {
   return (
-    <ProtectedRoute perfis={["admin", "supervisor"]}>
+    <ProtectedRoute perfis={["administrador", "supervisor"]}>
       <PageHeader titulo="CV x Sienge" descricao="De/Para de billId e reservas"
         acoes={<Button size="sm" onClick={() => toast.success("Mapeamento criado (mock)")}><Plus className="h-4 w-4 mr-1" />Novo</Button>}
       />

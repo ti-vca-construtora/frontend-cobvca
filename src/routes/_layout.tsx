@@ -1,9 +1,15 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app/AppSidebar";
 import { AppHeader } from "@/components/app/AppHeader";
+import { getToken } from "@/lib/api";
 
 export const Route = createFileRoute("/_layout")({
+  beforeLoad: () => {
+    if (!getToken()) {
+      throw redirect({ to: "/login" });
+    }
+  },
   component: LayoutComponent,
 });
 
@@ -22,3 +28,4 @@ function LayoutComponent() {
     </SidebarProvider>
   );
 }
+

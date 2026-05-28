@@ -1,7 +1,8 @@
-export type Perfil = "admin" | "supervisor" | "cobrador" | "negativador";
+export type Perfil = "administrador" | "supervisor" | "cobrador" | "negativador";
 
 export interface Usuario {
   id: string;
+  userId: string;
   nome: string;
   email: string;
   perfil: Perfil;

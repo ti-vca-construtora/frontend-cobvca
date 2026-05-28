@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app/PageHeader";
-import { FilterBar } from "@/components/app/FilterBar";
 import { DataTable, type Column } from "@/components/app/DataTable";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,108 +9,191 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { Download } from "lucide-react";
-import { processosMock, clientesMock, empresasMock } from "@/features/mocks/data";
-import type { Processo } from "@/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Search } from "lucide-react";
+import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/_layout/consultas")({ component: ConsultasPage });
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type BqRow = Record<string, unknown>;
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 function ConsultasPage() {
-  const [empresa, setEmpresa] = useState("todas");
-  const [origem, setOrigem] = useState("todas");
-  const [busca, setBusca] = useState("");
-  const [aberto, setAberto] = useState<Processo | null>(null);
-
-  const dados = useMemo(() => {
-    return processosMock.filter((p) => {
-      if (empresa !== "todas" && p.empresaId !== empresa) return false;
-      if (origem !== "todas" && p.origem !== origem) return false;
-      if (busca) {
-        const cli = clientesMock.find((c) => c.id === p.clienteId);
-        const txt = `${cli?.nome} ${cli?.documento}`.toLowerCase();
-        if (!txt.includes(busca.toLowerCase())) return false;
-      }
-      return true;
-    });
-  }, [empresa, origem, busca]);
-
-  const colunas: Column<Processo>[] = [
-    { key: "cliente", header: "Cliente", accessor: (r) => clientesMock.find((c) => c.id === r.clienteId)?.nome ?? "", sortable: true,
-      render: (r) => {
-        const c = clientesMock.find((x) => x.id === r.clienteId);
-        return <div><div className="font-medium">{c?.nome}</div><div className="text-xs text-muted-foreground">{c?.documento}</div></div>;
-      } },
-    { key: "empresa", header: "Empresa", render: (r) => empresasMock.find((e) => e.id === r.empresaId)?.nome },
-    { key: "origem", header: "Origem", render: (r) => <Badge variant="outline">{r.origem}</Badge> },
-    { key: "diasVencidos", header: "Dias vencidos", sortable: true, accessor: (r) => r.diasVencidos, render: (r) => `${r.diasVencidos}d` },
-    { key: "valor", header: "Valor", sortable: true, accessor: (r) => r.valor, render: (r) => r.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) },
-    { key: "status", header: "Status", render: (r) => <Badge>{r.status.replace("_", " ")}</Badge> },
-  ];
-
   return (
     <>
-      <PageHeader titulo="Consultas" descricao="Consulta geral de registros (BQ / Sienge / CV)"
-        acoes={<Button variant="outline" size="sm"><Download className="h-4 w-4 mr-2" />Exportar</Button>}
-      />
-      <div className="space-y-4">
-        <FilterBar>
-          <div className="flex-1 min-w-[200px]">
-            <Label className="text-xs">Cliente / Documento</Label>
-            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar..." />
-          </div>
-          <div className="w-[200px]">
-            <Label className="text-xs">Empresa</Label>
-            <Select value={empresa} onValueChange={setEmpresa}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas</SelectItem>
-                {empresasMock.map((e) => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="w-[160px]">
-            <Label className="text-xs">Origem</Label>
-            <Select value={origem} onValueChange={setOrigem}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas</SelectItem>
-                <SelectItem value="Sienge">Sienge</SelectItem>
-                <SelectItem value="CV">CV</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </FilterBar>
-
-        <DataTable data={dados} columns={colunas} onRowClick={setAberto} />
-      </div>
-
-      <Sheet open={!!aberto} onOpenChange={(o) => !o && setAberto(null)}>
-        <SheetContent className="w-[480px] sm:max-w-[480px]">
-          <SheetHeader><SheetTitle>Detalhes do processo</SheetTitle></SheetHeader>
-          {aberto && (
-            <div className="mt-6 space-y-3 text-sm">
-              <Linha k="ID" v={aberto.id} />
-              <Linha k="Cliente" v={clientesMock.find((c) => c.id === aberto.clienteId)?.nome ?? ""} />
-              <Linha k="Empresa" v={empresasMock.find((e) => e.id === aberto.empresaId)?.nome ?? ""} />
-              <Linha k="Origem" v={aberto.origem} />
-              <Linha k="Status" v={aberto.status} />
-              <Linha k="Vencimento" v={aberto.vencimento} />
-              <Linha k="Dias vencidos" v={String(aberto.diasVencidos)} />
-              <Linha k="Valor" v={aberto.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} />
-              {aberto.observacoes && <Linha k="Observações" v={aberto.observacoes} />}
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <PageHeader titulo="Consultas" descricao="Consulta de registros diretamente no BigQuery (Sienge / CV)" />
+      <Tabs defaultValue="receber">
+        <TabsList className="mb-4">
+          <TabsTrigger value="receber">Contas a Receber</TabsTrigger>
+          <TabsTrigger value="recebidas">Contas Recebidas</TabsTrigger>
+        </TabsList>
+        <TabsContent value="receber">
+          <TabelaBq endpoint="/bq/contas-receber" queryKey="bq-contas-receber" />
+        </TabsContent>
+        <TabsContent value="recebidas">
+          <TabelaBq endpoint="/bq/contas-recebidas" queryKey="bq-contas-recebidas" />
+        </TabsContent>
+      </Tabs>
     </>
   );
 }
 
-function Linha({ k, v }: { k: string; v: string }) {
+// ─── Tabela genérica BQ com filtros ──────────────────────────────────────────
+
+function TabelaBq({ endpoint, queryKey }: { endpoint: string; queryKey: string }) {
+  const [option, setOption] = useState<string>("all");
+  const [client, setClient] = useState("");
+  const [enterprise, setEnterprise] = useState("");
+  const [limit, setLimit] = useState("200");
+  const [enabled, setEnabled] = useState(false);
+  const [aberto, setAberto] = useState<BqRow | null>(null);
+
+  const params = new URLSearchParams();
+  if (option && option !== "all") params.set("option", option);
+  if (client.trim()) params.set("client", client.trim());
+  if (enterprise.trim()) params.set("enterprise", enterprise.trim());
+  if (limit) params.set("limit", limit);
+
+  const { data: rows, isFetching, isError } = useQuery<BqRow[]>({
+    queryKey: [queryKey, option, client, enterprise, limit],
+    queryFn: () => api.get<BqRow[]>(`${endpoint}?${params.toString()}`),
+    enabled,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  function consultar() {
+    setEnabled(true);
+  }
+
+  const pick = (row: BqRow, keys: string[]): string => {
+    for (const k of keys) {
+      const v = row[k];
+      if (v != null && v !== "") return String(v);
+    }
+    return "—";
+  };
+
+  const colunas: Column<BqRow>[] = [
+    {
+      key: "cliente", header: "Cliente",
+      render: (r) => (
+        <div>
+          <div className="font-medium">{pick(r, ["cliente", "nomeCliente", "client"])}</div>
+          <div className="text-xs text-muted-foreground">{pick(r, ["documento", "cpfCnpj", "cpf_cnpj"])}</div>
+        </div>
+      ),
+    },
+    { key: "empresa", header: "Empreendimento", render: (r) => pick(r, ["empresa", "nomeEmpreendimento", "empreendimento"]) },
+    {
+      key: "valor", header: "Valor",
+      render: (r) => {
+        const raw = r["valor"] ?? r["vlrAberto"] ?? r["valorAberto"];
+        if (raw == null) return "—";
+        const n = Number(raw);
+        return isNaN(n) ? String(raw) : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      },
+    },
+    {
+      key: "dias", header: "Dias vencidos",
+      render: (r) => {
+        const v = r["dias"] ?? r["diasVencidos"] ?? r["diasAtraso"];
+        return v != null ? `${v}d` : "—";
+      },
+    },
+    {
+      key: "vencimento", header: "Vencimento",
+      render: (r) => {
+        const v = pick(r, ["vencimento", "dataVencimento", "dtVencimento"]);
+        if (v === "—") return "—";
+        try { return new Date(v).toLocaleDateString("pt-BR"); } catch { return v; }
+      },
+    },
+    {
+      key: "origem", header: "Origem",
+      render: (r) => {
+        const v = pick(r, ["sourceBase", "origem", "erp", "base"]);
+        return v !== "—" ? <Badge variant="outline">{v}</Badge> : null;
+      },
+    },
+  ];
+
   return (
-    <div className="flex justify-between border-b pb-2">
-      <span className="text-muted-foreground">{k}</span>
-      <span className="font-medium text-right">{v}</span>
+    <div className="space-y-4">
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="space-y-1 w-[160px]">
+          <Label className="text-xs">Opção</Label>
+          <Select value={option} onValueChange={setOption}>
+            <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="negativation">Negativação</SelectItem>
+              <SelectItem value="charge">Cobrança</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1 flex-1 min-w-[160px]">
+          <Label className="text-xs">Cliente</Label>
+          <Input placeholder="Nome ou CPF/CNPJ" value={client} onChange={(e) => setClient(e.target.value)} />
+        </div>
+        <div className="space-y-1 flex-1 min-w-[160px]">
+          <Label className="text-xs">Empreendimento</Label>
+          <Input placeholder="Nome" value={enterprise} onChange={(e) => setEnterprise(e.target.value)} />
+        </div>
+        <div className="space-y-1 w-[110px]">
+          <Label className="text-xs">Limite</Label>
+          <Input type="number" min={1} max={1000} value={limit} onChange={(e) => setLimit(e.target.value)} />
+        </div>
+        <Button onClick={consultar} disabled={isFetching} className="gap-2">
+          <Search className="h-4 w-4" />
+          {isFetching ? "Consultando…" : "Consultar"}
+        </Button>
+      </div>
+
+      {/* Resultado */}
+      {isFetching && (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+        </div>
+      )}
+
+      {isError && (
+        <p className="text-sm text-destructive">Erro ao consultar o BigQuery.</p>
+      )}
+
+      {!isFetching && rows && (
+        <>
+          <p className="text-xs text-muted-foreground">{rows.length} registro(s) encontrado(s)</p>
+          <DataTable data={rows} columns={colunas} onRowClick={setAberto} />
+        </>
+      )}
+
+      {!enabled && !isFetching && (
+        <p className="text-sm text-muted-foreground">Configure os filtros e clique em Consultar.</p>
+      )}
+
+      {/* Sheet de detalhe */}
+      {aberto && (
+        <Sheet open onOpenChange={(o) => !o && setAberto(null)}>
+          <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto">
+            <SheetHeader><SheetTitle>Detalhes do registro</SheetTitle></SheetHeader>
+            <div className="mt-6 space-y-2 text-sm">
+              {Object.entries(aberto)
+                .filter(([, v]) => v != null && v !== "")
+                .map(([k, v]) => (
+                  <div key={k} className="flex justify-between border-b pb-2 gap-4">
+                    <span className="text-muted-foreground shrink-0">{k}</span>
+                    <span className="font-medium text-right break-all">{String(v)}</span>
+                  </div>
+                ))}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 }

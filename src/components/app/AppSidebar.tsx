@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Search, Ban, HandCoins, FolderKanban, Plus,
-  Settings, FileText, ArrowLeftRight, Building2, Cog,
+  Settings, FileText, ArrowLeftRight, Building2, Cog, Undo2,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -28,28 +28,29 @@ const grupos: { label: string; items: Item[] }[] = [
   {
     label: "Negativação",
     items: [
-      { title: "Negativação", url: "/negativacao", icon: Ban, perfis: ["admin", "supervisor", "negativador"] },
+      { title: "Negativação", url: "/negativacao", icon: Ban, perfis: ["administrador", "supervisor", "negativador"] },
+      { title: "Retiradas", url: "/negativacao/retiradas", icon: Undo2, perfis: ["administrador", "supervisor", "negativador"] },
     ],
   },
   {
     label: "Cobrança",
     items: [
-      { title: "Meus Processos", url: "/cobranca/meus-processos", icon: FolderKanban, perfis: ["admin", "supervisor", "cobrador"] },
-      { title: "Novo Processo", url: "/cobranca/novo-processo", icon: Plus, perfis: ["admin", "supervisor"] },
+      { title: "Meus Processos", url: "/cobranca/meus-processos", icon: FolderKanban, perfis: ["administrador", "supervisor", "cobrador"] },
+      { title: "Novo Processo", url: "/cobranca/novo-processo", icon: Plus, perfis: ["administrador", "supervisor"] },
     ],
   },
   {
     label: "Administração",
     items: [
       { title: "Tratativa Interna", url: "/admin/tratativa-interna", icon: FileText },
-      { title: "CV x Sienge", url: "/admin/cv-sienge", icon: ArrowLeftRight, perfis: ["admin", "supervisor"] },
-      { title: "Empreendimento", url: "/admin/empreendimento", icon: Building2, perfis: ["admin", "supervisor"] },
+      { title: "CV x Sienge", url: "/admin/cv-sienge", icon: ArrowLeftRight, perfis: ["administrador", "supervisor"] },
+      { title: "Empreendimento", url: "/admin/empreendimento", icon: Building2, perfis: ["administrador", "supervisor"] },
     ],
   },
   {
     label: "Sistema",
     items: [
-      { title: "Configurações", url: "/configuracoes", icon: Cog, perfis: ["admin"] },
+      { title: "Configurações", url: "/configuracoes", icon: Cog, perfis: ["administrador"] },
     ],
   },
 ];
@@ -71,7 +72,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {grupos.map((g) => {
-          const items = g.items.filter((i) => !i.perfis || i.perfis.includes(usuario.perfil));
+          const items = g.items.filter((i) => !i.perfis || (usuario && i.perfis.includes(usuario.perfil)));
           if (!items.length) return null;
           return (
             <SidebarGroup key={g.label}>

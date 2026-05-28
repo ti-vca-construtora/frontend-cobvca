@@ -12,7 +12,7 @@ import type {
 } from "@/types";
 
 export const usuariosMock: Usuario[] = [
-  { id: "u1", nome: "Ana Admin", email: "ana@empresa.com", perfil: "admin" },
+  { id: "u1", nome: "Ana Admin", email: "ana@empresa.com", perfil: "administrador" },
   { id: "u2", nome: "Sergio Supervisor", email: "sergio@empresa.com", perfil: "supervisor" },
   { id: "u3", nome: "Carlos Cobrador", email: "carlos@empresa.com", perfil: "cobrador" },
   { id: "u4", nome: "Nina Negativador", email: "nina@empresa.com", perfil: "negativador" },
