@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -8,27 +8,20 @@ import { DataTable, type Column } from "@/components/app/DataTable";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "sonner";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 
 export const Route = createFileRoute("/_layout/cobranca/novo-processo")({ component: NovoProcessoPage });
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-interface ChargeBatch {
-  id: string;
-  batch_code: string;
-  status: string;
-  source_view: string;
-  filters_applied: Record<string, unknown>;
-  created_at: string;
-}
 
 interface ChargeItem {
   id: string;
@@ -54,15 +47,40 @@ interface AppUser {
   role: string;
 }
 
+interface Enterprise {
+  id: string;
+  cost_center_name: string;
+  status: string;
+}
+
+interface BqRow {
+  empresa?: string;
+  cliente?: string;
+  documento?: string;
+  dataVencimento?: string;
+  valor?: number;
+  [key: string]: unknown;
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 function NovoProcessoPage() {
   return (
     <ProtectedRoute perfis={["administrador", "supervisor"]}>
-      <PageHeader titulo="Novo Processo" descricao="Criação e distribuição de processos de cobrança" />
+      <PageHeader
+        titulo="Novo Processo"
+        descricao="Criação e distribuição de processos de cobrança"
+        acoes={
+          <Button asChild size="sm" variant="outline">
+            <Link to="/cobranca/meus-processos">
+              <ArrowLeft className="h-4 w-4 mr-2" />Voltar
+            </Link>
+          </Button>
+        }
+      />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-1"><CriarBatchForm /></div>
-        <div className="lg:col-span-2"><ListaBatches /></div>
+        <div className="lg:col-span-2"><ContasProcessadas /></div>
       </div>
     </ProtectedRoute>
   );
@@ -71,222 +89,252 @@ function NovoProcessoPage() {
 // ─── Formulário de criação de batch ─────────────────────────────────────────
 
 function CriarBatchForm() {
-  const queryClient = useQueryClient();
-  const [source, setSource] = useState("contas-receber");
-  const [option, setOption] = useState("charge");
-  const [client, setClient] = useState("");
-  const [enterprise, setEnterprise] = useState("");
+  const [selectedEnterprises, setSelectedEnterprises] = useState<string[]>([]);
   const [limit, setLimit] = useState("200");
   const [aplicarS1, setAplicarS1] = useState(false);
   const [aplicarCronograma, setAplicarCronograma] = useState(false);
-  const [avulsaOpen, setAvulsaOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  return (
+    <>
+      <Card>
+        <CardHeader><CardTitle className="text-base">Criar processo</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <EnterprisesMultiSelect selected={selectedEnterprises} onChange={setSelectedEnterprises} />
+          <div className="space-y-1">
+            <Label>Limite de itens</Label>
+            <Input type="number" min={1} max={1000} value={limit} onChange={(e) => setLimit(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="s1-charge" checked={aplicarS1} onCheckedChange={(v) => setAplicarS1(!!v)} />
+            <Label htmlFor="s1-charge" className="cursor-pointer">Aplicar filtro S1</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="cronograma-charge" checked={aplicarCronograma} onCheckedChange={(v) => setAplicarCronograma(!!v)} />
+            <Label htmlFor="cronograma-charge" className="cursor-pointer">Aplicar cronograma</Label>
+          </div>
+          <Button className="w-full" variant="outline" onClick={() => setPreviewOpen(true)}>
+            Pré-visualizar dados
+          </Button>
+        </CardContent>
+      </Card>
+      <PreviewSheet
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        enterprises={selectedEnterprises}
+        limit={limit}
+        aplicarS1={aplicarS1}
+        aplicarCronograma={aplicarCronograma}
+      />
+    </>
+  );
+}
+
+// ─── Multi-select de empreendimentos ─────────────────────────────────────────
+
+function EnterprisesMultiSelect({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const { data: list = [] } = useQuery<Enterprise[]>({
+    queryKey: ["enterprises"],
+    queryFn: () => api.get<Enterprise[]>("/enterprises"),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const active = list.filter((e) => e.status === "ativo");
+
+  const toggle = (name: string) =>
+    onChange(selected.includes(name) ? selected.filter((x) => x !== name) : [...selected, name]);
+
+  const label =
+    selected.length === 0
+      ? "Todos os empreendimentos"
+      : selected.length === 1
+        ? selected[0]
+        : `${selected.length} selecionados`;
+
+  return (
+    <div className="space-y-1">
+      <Label>Empreendimentos</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="w-full justify-between font-normal">
+            <span className="truncate">{label}</span>
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-2" align="start">
+          <ScrollArea className="h-56">
+            <div className="space-y-1 pr-2">
+              {active.map((e) => (
+                <div
+                  key={e.id}
+                  className="flex items-center gap-2 rounded px-2 py-1 hover:bg-muted cursor-pointer"
+                  onClick={() => toggle(e.cost_center_name)}
+                >
+                  <Checkbox
+                    checked={selected.includes(e.cost_center_name)}
+                    onCheckedChange={() => toggle(e.cost_center_name)}
+                  />
+                  <span className="text-sm">{e.cost_center_name}</span>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          {selected.length > 0 && (
+            <Button variant="ghost" size="sm" className="mt-1 w-full text-xs" onClick={() => onChange([])}>
+              Limpar seleção
+            </Button>
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+// ─── Sheet de pré-visualização ───────────────────────────────────────────────
+
+function PreviewSheet({
+  open,
+  onClose,
+  enterprises,
+  limit,
+  aplicarS1,
+  aplicarCronograma,
+}: {
+  open: boolean;
+  onClose: () => void;
+  enterprises: string[];
+  limit: string;
+  aplicarS1: boolean;
+  aplicarCronograma: boolean;
+}) {
+  const queryClient = useQueryClient();
+
+  const { data: rows = [], isFetching, isError } = useQuery<BqRow[]>({
+    queryKey: ["bq-preview", limit],
+    queryFn: () => api.get<BqRow[]>("/bq/contas-receber", { limit: limit || "200", option: "charge" }),
+    enabled: open,
+    staleTime: 1000 * 60 * 2,
+    retry: false,
+  });
 
   const mutation = useMutation({
     mutationFn: () =>
       api.post("/charges", {
-        source,
-        option,
-        ...(client.trim() ? { client: client.trim() } : {}),
-        ...(enterprise.trim() ? { enterprise: enterprise.trim() } : {}),
+        source: "contas-receber",
+        option: "charge",
+        enterprises,
         limit: Number(limit),
         ...(aplicarS1 ? { aplicar_filtro_s1: true } : {}),
         ...(aplicarCronograma ? { aplicar_cronograma: true } : {}),
       }),
     onSuccess: (data: unknown) => {
       queryClient.invalidateQueries({ queryKey: ["charge-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["charge-items-all"] });
       const res = data as { batch: { batch_code: string }; insertedItems: number };
       toast.success(`Processo ${res.batch.batch_code} criado — ${res.insertedItems} itens`);
+      onClose();
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Erro ao criar processo.");
     },
   });
 
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">Criar processo</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="space-y-1">
-          <Label>Fonte</Label>
-          <Select value={source} onValueChange={setSource}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="contas-receber">Contas a Receber</SelectItem>
-              <SelectItem value="contas-recebidas">Contas Recebidas</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>Tipo</Label>
-          <Select value={option} onValueChange={setOption}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="charge">Cobrança</SelectItem>
-              <SelectItem value="negativation">Negativação</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>Filtro — Cliente (opcional)</Label>
-          <Input placeholder="Ex: João Silva" value={client} onChange={(e) => setClient(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label>Filtro — Empreendimento (opcional)</Label>
-          <Input placeholder="Ex: Residencial Primavera" value={enterprise} onChange={(e) => setEnterprise(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label>Limite de itens</Label>
-          <Input type="number" min={1} max={1000} value={limit} onChange={(e) => setLimit(e.target.value)} />
-        </div>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="s1-charge"
-            checked={aplicarS1}
-            onCheckedChange={(v) => setAplicarS1(!!v)}
-          />
-          <Label htmlFor="s1-charge" className="cursor-pointer">Aplicar filtro S1</Label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="cronograma-charge"
-            checked={aplicarCronograma}
-            onCheckedChange={(v) => setAplicarCronograma(!!v)}
-          />
-          <Label htmlFor="cronograma-charge" className="cursor-pointer">Aplicar cronograma</Label>
-        </div>
-        <Button
-          className="w-full"
-          disabled={mutation.isPending}
-          onClick={() => mutation.mutate()}
-        >
-          {mutation.isPending ? "Processando…" : "Criar processo"}
-        </Button>
-        <Button
-          className="w-full"
-          variant="outline"
-          onClick={() => setAvulsaOpen(true)}
-        >
-          Cobrança Avulsa
-        </Button>
-        <CobrancaAvulsaDialog open={avulsaOpen} onClose={() => setAvulsaOpen(false)} />
-      </CardContent>
-    </Card>
-  );
-}
+  const filtered =
+    enterprises.length > 0
+      ? rows.filter((r) => {
+          const emp = String(r.empresa ?? "").toLowerCase();
+          return enterprises.some((e) => emp.includes(e.toLowerCase()));
+        })
+      : rows;
 
-// ─── Lista de batches ─────────────────────────────────────────────────────────
-
-const STATUS_BATCH_LABEL: Record<string, string> = {
-  pendente: "Pendente",
-  em_andamento: "Em andamento",
-  concluido: "Concluído",
-  cancelado: "Cancelado",
-};
-
-function ListaBatches() {
-  const [selectedBatch, setSelectedBatch] = useState<ChargeBatch | null>(null);
-
-  const { data: batches, isLoading } = useQuery<ChargeBatch[]>({
-    queryKey: ["charge-batches"],
-    queryFn: () => api.get<ChargeBatch[]>("/charges"),
-  });
-
-  const colunas: Column<ChargeBatch>[] = [
-    { key: "code", header: "Código", accessor: (r) => r.batch_code },
+  const columns: Column<BqRow>[] = [
+    { key: "cliente", header: "Cliente", accessor: (r) => String(r.cliente ?? "—") },
+    { key: "empresa", header: "Empreendimento", accessor: (r) => String(r.empresa ?? "—") },
+    { key: "documento", header: "Documento", accessor: (r) => String(r.documento ?? "—") },
     {
-      key: "status", header: "Status",
-      render: (r) => <Badge variant={r.status === "concluido" ? "default" : "secondary"}>{STATUS_BATCH_LABEL[r.status] ?? r.status}</Badge>,
+      key: "valor",
+      header: "Valor",
+      render: (r) =>
+        typeof r.valor === "number"
+          ? r.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+          : "—",
     },
     {
-      key: "date", header: "Criado em",
-      accessor: (r) => r.created_at,
-      render: (r) => new Date(r.created_at).toLocaleDateString("pt-BR"),
-    },
-    {
-      key: "ver", header: "",
-      render: (r) => (
-        <Button size="sm" variant="outline" onClick={() => setSelectedBatch(r)}>
-          Ver itens
-        </Button>
-      ),
+      key: "venc",
+      header: "Vencimento",
+      accessor: (r) =>
+        r.dataVencimento ? new Date(String(r.dataVencimento)).toLocaleDateString("pt-BR") : "—",
     },
   ];
 
-  if (isLoading) {
-    return <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
-  }
-
   return (
-    <>
-      <div>
-        <h2 className="font-semibold mb-4">Processos criados</h2>
-        <DataTable data={batches ?? []} columns={colunas} />
-      </div>
-      {selectedBatch && (
-        <BatchItemsSheet batch={selectedBatch} onClose={() => setSelectedBatch(null)} />
-      )}
-    </>
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="w-[90vw] sm:max-w-5xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>
+            Pré-visualização — Contas a Receber ({filtered.length} registros)
+          </SheetTitle>
+        </SheetHeader>
+        <div className="mt-4">
+          {isFetching ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : isError ? (
+            <p className="text-sm text-destructive">Erro ao carregar dados do BigQuery.</p>
+          ) : (
+            <DataTable data={filtered} columns={columns} />
+          )}
+        </div>
+        <div className="mt-6 flex justify-end border-t pt-4">
+          <Button
+            disabled={mutation.isPending || isFetching || filtered.length === 0}
+            onClick={() => mutation.mutate()}
+          >
+            {mutation.isPending ? "Processando…" : `Criar processo (${filtered.length} itens)`}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
-// ─── Sheet de itens + atribuição ─────────────────────────────────────────────
+// ─── Contas Processadas ───────────────────────────────────────────────────────
 
-function BatchItemsSheet({ batch, onClose }: { batch: ChargeBatch; onClose: () => void }) {
-  const queryClient = useQueryClient();
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [cobradorId, setCobradorId] = useState("");
-
-  const { data: items, isLoading: loadingItems } = useQuery<ChargeItem[]>({
-    queryKey: ["charge-items", batch.id],
-    queryFn: () => api.get<ChargeItem[]>(`/charges/items?batchId=${batch.id}`),
+function ContasProcessadas() {
+  const { data: items = [], isLoading } = useQuery<ChargeItem[]>({
+    queryKey: ["charge-items-all"],
+    queryFn: () => api.get<ChargeItem[]>("/charges/items"),
+    staleTime: 1000 * 60,
   });
-
-  const { data: users } = useQuery<AppUser[]>({
-    queryKey: ["users"],
-    queryFn: () => api.get<AppUser[]>("/users"),
-  });
-
-  const cobradores = (users ?? []).filter((u) => u.role === "cobrador" || u.role === "supervisor" || u.role === "administrador");
-
-  const assignMutation = useMutation({
-    mutationFn: () =>
-      api.patch("/charges/items/assign", {
-        assignedToUserId: cobradores.find((u) => u.id === cobradorId)?.userId ?? cobradorId,
-        itemIds: selectedIds,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["charge-items", batch.id] });
-      setSelectedIds([]);
-      toast.success("Itens atribuídos com sucesso!");
-    },
-    onError: (err) => {
-      toast.error(err instanceof ApiError ? err.message : "Erro ao atribuir.");
-    },
-  });
-
-  const toggleItem = (id: string) =>
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
 
   const columns: Column<ChargeItem>[] = [
-    {
-      key: "sel", header: "",
-      render: (r) => (
-        <Checkbox
-          checked={selectedIds.includes(r.id)}
-          onCheckedChange={() => toggleItem(r.id)}
-        />
-      ),
-    },
     { key: "client", header: "Cliente", accessor: (r) => r.client_name ?? "—" },
-    { key: "doc", header: "Documento", accessor: (r) => r.document ?? "—" },
     { key: "enterprise", header: "Empreendimento", accessor: (r) => r.enterprise_name ?? "—" },
+    { key: "doc", header: "Documento", accessor: (r) => r.document ?? "—" },
     {
-      key: "amount", header: "Valor",
-      render: (r) => r.amount != null ? r.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—",
+      key: "amount",
+      header: "Valor",
+      render: (r) =>
+        r.amount != null
+          ? r.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+          : "—",
     },
     { key: "days", header: "Dias", accessor: (r) => r.days_overdue ?? 0 },
     {
-      key: "flags", header: "Flags",
+      key: "status",
+      header: "Status",
+      render: (r) => <Badge variant="secondary">{r.status}</Badge>,
+    },
+    {
+      key: "flags",
+      header: "Flags",
       render: (r) => (
         <div className="flex gap-1">
           {r.internal_handling_flag && <Badge variant="destructive" className="text-xs">TI</Badge>}
@@ -294,49 +342,19 @@ function BatchItemsSheet({ batch, onClose }: { batch: ChargeBatch; onClose: () =
         </div>
       ),
     },
-    {
-      key: "status", header: "Status",
-      render: (r) => <Badge variant="secondary">{r.status}</Badge>,
-    },
   ];
 
+  if (isLoading) {
+    return (
+      <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+    );
+  }
+
   return (
-    <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-[90vw] sm:max-w-5xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Itens — {batch.batch_code}</SheetTitle>
-        </SheetHeader>
-
-        {selectedIds.length > 0 && (
-          <div className="flex items-center gap-3 mt-4 p-3 border rounded-md bg-muted">
-            <span className="text-sm font-medium">{selectedIds.length} item(s) selecionado(s)</span>
-            <Select value={cobradorId} onValueChange={setCobradorId}>
-              <SelectTrigger className="w-52"><SelectValue placeholder="Cobrador…" /></SelectTrigger>
-              <SelectContent>
-                {cobradores.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              disabled={!cobradorId || assignMutation.isPending}
-              onClick={() => assignMutation.mutate()}
-            >
-              {assignMutation.isPending ? "Atribuindo…" : "Atribuir"}
-            </Button>
-          </div>
-        )}
-
-        <div className="mt-4">
-          {loadingItems ? (
-            <div className="space-y-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : (
-            <DataTable data={items ?? []} columns={columns} />
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+    <div>
+      <h2 className="font-semibold mb-4">Contas processadas ({items.length})</h2>
+      <DataTable data={items} columns={columns} />
+    </div>
   );
 }
 

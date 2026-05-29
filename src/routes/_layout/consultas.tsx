@@ -12,13 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 export const Route = createFileRoute("/_layout/consultas")({ component: ConsultasPage });
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type BqRow = Record<string, unknown>;
+type BqRow = { id: string } & Record<string, unknown>;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -52,21 +52,29 @@ function TabelaBq({ endpoint, queryKey }: { endpoint: string; queryKey: string }
   const [enabled, setEnabled] = useState(false);
   const [aberto, setAberto] = useState<BqRow | null>(null);
 
-  const params = new URLSearchParams();
-  if (option && option !== "all") params.set("option", option);
-  if (client.trim()) params.set("client", client.trim());
-  if (enterprise.trim()) params.set("enterprise", enterprise.trim());
-  if (limit) params.set("limit", limit);
-
-  const { data: rows, isFetching, isError } = useQuery<BqRow[]>({
+  const {
+    data: rows,
+    isFetching,
+    isError,
+    error,
+    refetch,
+  } = useQuery<BqRow[], ApiError>({
     queryKey: [queryKey, option, client, enterprise, limit],
-    queryFn: () => api.get<BqRow[]>(`${endpoint}?${params.toString()}`),
+    queryFn: () =>
+      api.get<BqRow[]>(endpoint, {
+        option: option !== "all" ? option : undefined,
+        client: client.trim() || undefined,
+        enterprise: enterprise.trim() || undefined,
+        limit: limit.trim() || undefined,
+      }),
     enabled,
     staleTime: 1000 * 60 * 5,
+    retry: false,
   });
 
-  function consultar() {
+  async function consultar() {
     setEnabled(true);
+    await refetch();
   }
 
   const pick = (row: BqRow, keys: string[]): string => {
@@ -121,6 +129,11 @@ function TabelaBq({ endpoint, queryKey }: { endpoint: string; queryKey: string }
     },
   ];
 
+  const tableRows: BqRow[] = (rows ?? []).map((row, index) => ({
+    ...row,
+    id: String(row.id ?? row.verificador ?? `${queryKey}-${index}`),
+  }));
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -162,13 +175,15 @@ function TabelaBq({ endpoint, queryKey }: { endpoint: string; queryKey: string }
       )}
 
       {isError && (
-        <p className="text-sm text-destructive">Erro ao consultar o BigQuery.</p>
+        <p className="text-sm text-destructive">
+          Erro ao consultar o BigQuery{error?.message ? `: ${error.message}` : "."}
+        </p>
       )}
 
       {!isFetching && rows && (
         <>
-          <p className="text-xs text-muted-foreground">{rows.length} registro(s) encontrado(s)</p>
-          <DataTable data={rows} columns={colunas} onRowClick={setAberto} />
+          <p className="text-xs text-muted-foreground">{tableRows.length} registro(s) encontrado(s)</p>
+          <DataTable data={tableRows} columns={colunas} onRowClick={setAberto} />
         </>
       )}
 

@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, Search, Ban, HandCoins, FolderKanban, Plus,
-  Settings, FileText, ArrowLeftRight, Building2, Cog, Undo2,
+  LayoutDashboard, Search, Ban, HandCoins, FolderKanban,
+  Settings, FileText, ArrowLeftRight, Building2, Cog, Undo2, CalendarDays,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -36,7 +36,6 @@ const grupos: { label: string; items: Item[] }[] = [
     label: "Cobrança",
     items: [
       { title: "Meus Processos", url: "/cobranca/meus-processos", icon: FolderKanban, perfis: ["administrador", "supervisor", "cobrador"] },
-      { title: "Novo Processo", url: "/cobranca/novo-processo", icon: Plus, perfis: ["administrador", "supervisor"] },
     ],
   },
   {
@@ -50,6 +49,7 @@ const grupos: { label: string; items: Item[] }[] = [
   {
     label: "Sistema",
     items: [
+      { title: "Cronograma", url: "/cronograma", icon: CalendarDays, perfis: ["administrador"] },
       { title: "Configurações", url: "/configuracoes", icon: Cog, perfis: ["administrador"] },
     ],
   },

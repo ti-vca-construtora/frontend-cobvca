@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutNegativacaoRouteImport } from './routes/_layout/negativacao'
+import { Route as LayoutCronogramaRouteImport } from './routes/_layout/cronograma'
 import { Route as LayoutConsultasRouteImport } from './routes/_layout/consultas'
 import { Route as LayoutConfiguracoesRouteImport } from './routes/_layout/configuracoes'
 import { Route as LayoutCobrancaRouteImport } from './routes/_layout/cobranca'
@@ -42,6 +43,11 @@ const LayoutIndexRoute = LayoutIndexRouteImport.update({
 const LayoutNegativacaoRoute = LayoutNegativacaoRouteImport.update({
   id: '/negativacao',
   path: '/negativacao',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutCronogramaRoute = LayoutCronogramaRouteImport.update({
+  id: '/cronograma',
+  path: '/cronograma',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutConsultasRoute = LayoutConsultasRouteImport.update({
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/cobranca': typeof LayoutCobrancaRouteWithChildren
   '/configuracoes': typeof LayoutConfiguracoesRoute
   '/consultas': typeof LayoutConsultasRoute
+  '/cronograma': typeof LayoutCronogramaRoute
   '/negativacao': typeof LayoutNegativacaoRouteWithChildren
   '/admin/cv-sienge': typeof LayoutAdminCvSiengeRoute
   '/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/cobranca': typeof LayoutCobrancaRouteWithChildren
   '/configuracoes': typeof LayoutConfiguracoesRoute
   '/consultas': typeof LayoutConsultasRoute
+  '/cronograma': typeof LayoutCronogramaRoute
   '/': typeof LayoutIndexRoute
   '/admin/cv-sienge': typeof LayoutAdminCvSiengeRoute
   '/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/_layout/cobranca': typeof LayoutCobrancaRouteWithChildren
   '/_layout/configuracoes': typeof LayoutConfiguracoesRoute
   '/_layout/consultas': typeof LayoutConsultasRoute
+  '/_layout/cronograma': typeof LayoutCronogramaRoute
   '/_layout/negativacao': typeof LayoutNegativacaoRouteWithChildren
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/admin/cv-sienge': typeof LayoutAdminCvSiengeRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/cobranca'
     | '/configuracoes'
     | '/consultas'
+    | '/cronograma'
     | '/negativacao'
     | '/admin/cv-sienge'
     | '/admin/empreendimento'
@@ -178,6 +188,7 @@ export interface FileRouteTypes {
     | '/cobranca'
     | '/configuracoes'
     | '/consultas'
+    | '/cronograma'
     | '/'
     | '/admin/cv-sienge'
     | '/admin/empreendimento'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/_layout/cobranca'
     | '/_layout/configuracoes'
     | '/_layout/consultas'
+    | '/_layout/cronograma'
     | '/_layout/negativacao'
     | '/_layout/'
     | '/_layout/admin/cv-sienge'
@@ -238,6 +250,13 @@ declare module '@tanstack/react-router' {
       path: '/negativacao'
       fullPath: '/negativacao'
       preLoaderRoute: typeof LayoutNegativacaoRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/cronograma': {
+      id: '/_layout/cronograma'
+      path: '/cronograma'
+      fullPath: '/cronograma'
+      preLoaderRoute: typeof LayoutCronogramaRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/consultas': {
@@ -368,6 +387,7 @@ interface LayoutRouteChildren {
   LayoutCobrancaRoute: typeof LayoutCobrancaRouteWithChildren
   LayoutConfiguracoesRoute: typeof LayoutConfiguracoesRoute
   LayoutConsultasRoute: typeof LayoutConsultasRoute
+  LayoutCronogramaRoute: typeof LayoutCronogramaRoute
   LayoutNegativacaoRoute: typeof LayoutNegativacaoRouteWithChildren
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
@@ -377,6 +397,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutCobrancaRoute: LayoutCobrancaRouteWithChildren,
   LayoutConfiguracoesRoute: LayoutConfiguracoesRoute,
   LayoutConsultasRoute: LayoutConsultasRoute,
+  LayoutCronogramaRoute: LayoutCronogramaRoute,
   LayoutNegativacaoRoute: LayoutNegativacaoRouteWithChildren,
   LayoutIndexRoute: LayoutIndexRoute,
 }

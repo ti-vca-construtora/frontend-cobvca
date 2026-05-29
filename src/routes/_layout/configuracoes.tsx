@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -19,7 +19,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_layout/configuracoes")({ component: ConfigPage });
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Types -------------------------------------------------------------------
 
 interface Parameter {
   id: string;
@@ -59,32 +59,21 @@ interface AppUser {
   createdAt: string;
 }
 
-interface CompanySchedule {
-  id: string;
-  enterprise_name: string;
-  start_day: number;
-  end_day: number;
-  scope: "cobranca" | "negativacao" | "ambos";
-  status: "ativo" | "inativo";
-}
-
-// â”€â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Page --------------------------------------------------------------------
 
 function ConfigPage() {
   return (
     <ProtectedRoute perfis={["administrador"]}>
-      <PageHeader titulo="ConfiguraÃ§Ãµes" descricao="ParÃ¢metros de negÃ³cio e regras do sistema" />
+      <PageHeader titulo="Configurações" descricao="Parâmetros de negócio e regras do sistema" />
       <Tabs defaultValue="parametros">
         <TabsList className="mb-4">
-          <TabsTrigger value="parametros">ParÃ¢metros</TabsTrigger>
+          <TabsTrigger value="parametros">Parâmetros</TabsTrigger>
           <TabsTrigger value="regras">Regras de Ignorar</TabsTrigger>
-          <TabsTrigger value="cronograma">Cronograma</TabsTrigger>
-          <TabsTrigger value="integracoes">IntegraÃ§Ãµes</TabsTrigger>
-          <TabsTrigger value="usuarios">UsuÃ¡rios</TabsTrigger>
+          <TabsTrigger value="integracoes">Integrações</TabsTrigger>
+          <TabsTrigger value="usuarios">Usuários</TabsTrigger>
         </TabsList>
         <TabsContent value="parametros"><ParametrosTab /></TabsContent>
         <TabsContent value="regras"><RegrasTab /></TabsContent>
-        <TabsContent value="cronograma"><CronogramaTab /></TabsContent>
         <TabsContent value="integracoes"><IntegracoesTab /></TabsContent>
         <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
       </Tabs>
@@ -92,13 +81,13 @@ function ConfigPage() {
   );
 }
 
-// â”€â”€â”€ Aba: ParÃ¢metros â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Aba: Parâmetros ---------------------------------------------------------
 
 const PARAM_LABELS: Record<string, string> = {
-  negativacao_dias: "Prazo base de negativaÃ§Ã£o (dias)",
-  juridico_habitacao_dias: "Prazo jurÃ­dico â€” HabitaÃ§Ã£o (dias)",
-  juridico_lote_dias: "Prazo jurÃ­dico â€” Lote (dias)",
-  cobranca_dias: "Prazo base de cobranÃ§a (dias)",
+  negativacao_dias: "Prazo base de negativação (dias)",
+  juridico_habitacao_dias: "Prazo jurídico — Habitação (dias)",
+  juridico_lote_dias: "Prazo jurídico — Lote (dias)",
+  cobranca_dias: "Prazo base de cobrança (dias)",
 };
 
 function ParametrosTab() {
@@ -119,10 +108,10 @@ function ParametrosTab() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["parameters"] });
-      toast.success("ParÃ¢metro salvo com sucesso!");
+      toast.success("Parâmetro salvo com sucesso!");
     },
     onError: (err) => {
-      toast.error(err instanceof ApiError ? err.message : "Erro ao salvar parÃ¢metro.");
+      toast.error(err instanceof ApiError ? err.message : "Erro ao salvar parâmetro.");
     },
   });
 
@@ -141,7 +130,7 @@ function ParametrosTab() {
   }
 
   if (isError || !params) {
-    return <p className="text-sm text-destructive">NÃ£o foi possÃ­vel carregar os parÃ¢metros.</p>;
+    return <p className="text-sm text-destructive">Não foi possível carregar os parâmetros.</p>;
   }
 
   return (
@@ -181,21 +170,22 @@ function ParameterCard({ param, onSave, saving }: { param: Parameter; onSave: (v
           />
         </div>
         <Button size="sm" disabled={value === param.value || saving} onClick={() => onSave(value)}>
-          {saving ? "Salvandoâ€¦" : "Salvar"}
+          {saving ? "Salvando…" : "Salvar"}
         </Button>
       </CardContent>
     </Card>
   );
 }
 
-// â”€â”€â”€ Aba: Regras de Ignorar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Aba: Regras de Ignorar --------------------------------------------------
 
-const SCOPE_LABEL: Record<string, string> = { negativacao: "NegativaÃ§Ã£o", cobranca: "CobranÃ§a", ambos: "Ambos" };
+const SCOPE_LABEL: Record<string, string> = { negativacao: "Negativação", cobranca: "Cobrança", ambos: "Ambos" };
 const TYPE_LABEL: Record<string, string> = { documento: "Documento", parcela: "Parcela", processo: "Processo" };
 
 function RegrasTab() {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editItem, setEditItem] = useState<IgnoreRule | null>(null);
 
   const { data: rules, isLoading } = useQuery<IgnoreRule[]>({
     queryKey: ["ignore-rules"],
@@ -225,13 +215,18 @@ function RegrasTab() {
     {
       key: "acoes", header: "",
       render: (r) => (
-        <Button
-          size="icon" variant="ghost"
-          className="text-destructive hover:text-destructive"
-          onClick={() => deleteMutation.mutate(r.id)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex gap-1">
+          <Button size="icon" variant="ghost" onClick={() => setEditItem(r)}>
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon" variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={() => deleteMutation.mutate(r.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -239,12 +234,9 @@ function RegrasTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-4 w-4 mr-2" />Nova regra</Button>
-          </DialogTrigger>
-          <CreateRuleDialog onClose={() => setOpen(false)} />
-        </Dialog>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />Nova regra
+        </Button>
       </div>
 
       {isLoading ? (
@@ -252,82 +244,109 @@ function RegrasTab() {
       ) : (
         <DataTable data={rules ?? []} columns={columns} />
       )}
+
+      {createOpen && <RuleDialog onClose={() => setCreateOpen(false)} />}
+      {editItem && <RuleDialog rule={editItem} onClose={() => setEditItem(null)} />}
     </div>
   );
 }
 
-function CreateRuleDialog({ onClose }: { onClose: () => void }) {
+function RuleDialog({ rule, onClose }: { rule?: IgnoreRule; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [ruleType, setRuleType] = useState<string>("documento");
-  const [erp, setErp] = useState<string>("sienge");
-  const [value, setValue] = useState("");
-  const [scope, setScope] = useState<string>("ambos");
+  const isEdit = !!rule;
+  const [ruleType, setRuleType] = useState<string>(rule?.rule_type ?? "documento");
+  const [erp, setErp] = useState<string>(rule?.erp ?? "sienge");
+  const [value, setValue] = useState(rule?.value ?? "");
+  const [scope, setScope] = useState<string>(rule?.scope ?? "ambos");
+  const [status, setStatus] = useState<string>(rule?.status ?? "ativo");
 
-  const createMutation = useMutation({
+  useEffect(() => {
+    setErp(ruleType === "processo" ? "cv" : "sienge");
+  }, [ruleType]);
+
+  const mutation = useMutation({
     mutationFn: () =>
-      api.post("/ignore-rules", { ruleType, erp, value, scope }),
+      isEdit
+        ? api.patch(`/ignore-rules/${rule!.id}`, { ruleType, erp, value, scope, status })
+        : api.post("/ignore-rules", { ruleType, erp, value, scope }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ignore-rules"] });
-      toast.success("Regra criada com sucesso!");
+      toast.success(isEdit ? "Regra atualizada!" : "Regra criada com sucesso!");
       onClose();
     },
     onError: (err) => {
-      toast.error(err instanceof ApiError ? err.message : "Erro ao criar regra.");
+      toast.error(err instanceof ApiError ? err.message : "Erro ao salvar regra.");
     },
   });
 
   return (
-    <DialogContent className="sm:max-w-md">
-      <DialogHeader><DialogTitle>Nova regra de ignorar</DialogTitle></DialogHeader>
-      <div className="space-y-4 py-2">
-        <div className="space-y-1">
-          <Label>Tipo</Label>
-          <Select value={ruleType} onValueChange={setRuleType}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="documento">Documento</SelectItem>
-              <SelectItem value="parcela">Parcela</SelectItem>
-              <SelectItem value="processo">Processo</SelectItem>
-            </SelectContent>
-          </Select>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Editar regra" : "Nova regra de ignorar"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1">
+            <Label>Tipo</Label>
+            <Select value={ruleType} onValueChange={setRuleType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="documento">Documento</SelectItem>
+                <SelectItem value="parcela">Parcela</SelectItem>
+                <SelectItem value="processo">Processo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>ERP</Label>
+            <Select value={erp} onValueChange={setErp}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sienge">Sienge</SelectItem>
+                <SelectItem value="cv">CV</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Valor</Label>
+            <Input placeholder="Ex: CESD ou 000.000.000-00" value={value} onChange={(e) => setValue(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Escopo</Label>
+            <Select value={scope} onValueChange={setScope}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="negativacao">Negativação</SelectItem>
+                <SelectItem value="cobranca">Cobrança</SelectItem>
+                <SelectItem value="ambos">Ambos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {isEdit && (
+            <div className="space-y-1">
+              <Label>Status</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ativo">Ativo</SelectItem>
+                  <SelectItem value="inativo">Inativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
-        <div className="space-y-1">
-          <Label>ERP</Label>
-          <Select value={erp} onValueChange={setErp}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sienge">Sienge</SelectItem>
-              <SelectItem value="cv">CV</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>Valor</Label>
-          <Input placeholder="Ex: CESD ou 000.000.000-00" value={value} onChange={(e) => setValue(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label>Escopo</Label>
-          <Select value={scope} onValueChange={setScope}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="negativacao">NegativaÃ§Ã£o</SelectItem>
-              <SelectItem value="cobranca">CobranÃ§a</SelectItem>
-              <SelectItem value="ambos">Ambos</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Cancelar</Button>
-        <Button disabled={!value.trim() || createMutation.isPending} onClick={() => createMutation.mutate()}>
-          {createMutation.isPending ? "Salvandoâ€¦" : "Criar regra"}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button disabled={!value.trim() || mutation.isPending} onClick={() => mutation.mutate()}>
+            {mutation.isPending ? "Salvando…" : isEdit ? "Salvar" : "Criar regra"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-// â”€â”€â”€ Aba: IntegraÃ§Ãµes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Aba: Integrações ---------------------------------------------------------
 
 const BASE_LABEL: Record<string, string> = { vca: "CV/VCA", lotear: "Lotear" };
 
@@ -345,7 +364,7 @@ function IntegracoesTab() {
     mutationFn: (id: string) => api.delete(`/integrations/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["integrations"] });
-      toast.success("IntegraÃ§Ã£o removida.");
+      toast.success("Integração removida.");
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Erro ao remover.");
@@ -354,7 +373,7 @@ function IntegracoesTab() {
 
   const columns: Column<Integration>[] = [
     { key: "base", header: "Base", render: (r) => <Badge variant="outline">{BASE_LABEL[r.base] ?? r.base}</Badge> },
-    { key: "username", header: "UsuÃ¡rio", accessor: (r) => r.username },
+    { key: "username", header: "Usuário", accessor: (r) => r.username },
     { key: "secret", header: "Segredo", render: (r) => <code className="text-xs bg-muted px-1 py-0.5 rounded">{r.secret}</code> },
     { key: "base_url", header: "URL Base", accessor: (r) => r.base_url },
     {
@@ -384,7 +403,7 @@ function IntegracoesTab() {
     <div className="space-y-4">
       <div className="flex justify-end">
         <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />Nova integraÃ§Ã£o
+          <Plus className="h-4 w-4 mr-2" />Nova integração
         </Button>
       </div>
       {isLoading ? (
@@ -420,7 +439,7 @@ function IntegrationDialog({
         : api.post("/integrations", { base, username, secret, baseUrl }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["integrations"] });
-      toast.success(isEdit ? "IntegraÃ§Ã£o atualizada!" : "IntegraÃ§Ã£o criada!");
+      toast.success(isEdit ? "Integração atualizada!" : "Integração criada!");
       onClose();
     },
     onError: (err) => {
@@ -434,7 +453,7 @@ function IntegrationDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar integraÃ§Ã£o" : "Nova integraÃ§Ã£o"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar integração" : "Nova integração"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1">
@@ -448,16 +467,16 @@ function IntegrationDialog({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>UsuÃ¡rio</Label>
+            <Label>Usuário</Label>
             <Input value={username} onChange={(e) => setUsername(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>{isEdit ? "Novo segredo (deixe em branco para nÃ£o alterar)" : "Segredo"}</Label>
+            <Label>{isEdit ? "Novo segredo (deixe em branco para não alterar)" : "Segredo"}</Label>
             <Input
               type="password"
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
-              placeholder={isEdit ? "â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" : ""}
+              placeholder={isEdit ? "••••••••" : ""}
             />
           </div>
           <div className="space-y-1">
@@ -468,7 +487,7 @@ function IntegrationDialog({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button disabled={!canSave || mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? "Salvandoâ€¦" : "Salvar"}
+            {mutation.isPending ? "Salvando…" : "Salvar"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -476,7 +495,7 @@ function IntegrationDialog({
   );
 }
 
-// â”€â”€â”€ Aba: UsuÃ¡rios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Aba: Usuários -----------------------------------------------------------
 
 const ROLE_LABEL: Record<string, string> = {
   administrador: "Administrador",
@@ -499,7 +518,7 @@ function UsuariosTab() {
     mutationFn: (id: string) => api.delete(`/users/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      toast.success("UsuÃ¡rio removido.");
+      toast.success("Usuário removido.");
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Erro ao remover.");
@@ -540,7 +559,7 @@ function UsuariosTab() {
     <div className="space-y-4">
       <div className="flex justify-end">
         <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />Novo usuÃ¡rio
+          <Plus className="h-4 w-4 mr-2" />Novo usuário
         </Button>
       </div>
       {isLoading ? (
@@ -571,7 +590,7 @@ function UserDialog({ user, onClose }: { user?: AppUser; onClose: () => void }) 
         : api.post("/users", { fullName, email, password, role }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      toast.success(isEdit ? "UsuÃ¡rio atualizado!" : "UsuÃ¡rio criado!");
+      toast.success(isEdit ? "Usuário atualizado!" : "Usuário criado!");
       onClose();
     },
     onError: (err) => {
@@ -585,7 +604,7 @@ function UserDialog({ user, onClose }: { user?: AppUser; onClose: () => void }) 
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar usuÃ¡rio" : "Novo usuÃ¡rio"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar usuário" : "Novo usuário"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1">
@@ -599,7 +618,7 @@ function UserDialog({ user, onClose }: { user?: AppUser; onClose: () => void }) 
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>Senha inicial (mÃ­n. 8 caracteres)</Label>
+                <Label>Senha inicial (mín. 8 caracteres)</Label>
                 <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
             </>
@@ -632,159 +651,7 @@ function UserDialog({ user, onClose }: { user?: AppUser; onClose: () => void }) 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button disabled={!canSave || mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? "Salvandoâ€¦" : "Salvar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── Aba: Cronograma ──────────────────────────────────────────────────────────
-
-const SCOPE_SCHED_LABEL: Record<string, string> = { cobranca: "Cobrança", negativacao: "Negativação", ambos: "Ambos" };
-
-function CronogramaTab() {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [editItem, setEditItem] = useState<CompanySchedule | null>(null);
-
-  const { data: schedules, isLoading } = useQuery<CompanySchedule[]>({
-    queryKey: ["company-schedule"],
-    queryFn: () => api.get<CompanySchedule[]>("/parameters/cronograma"),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/parameters/cronograma/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["company-schedule"] });
-      toast.success("Entrada removida.");
-    },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : "Erro ao remover."),
-  });
-
-  const today = new Date().getDate();
-
-  const columns: Column<CompanySchedule>[] = [
-    { key: "enterprise", header: "Empreendimento", accessor: (r) => r.enterprise_name },
-    { key: "window", header: "Janela", render: (r) => `Dia ${r.start_day} a ${r.end_day}` },
-    {
-      key: "today", header: "Hoje",
-      render: (r) => (
-        <Badge variant={today >= r.start_day && today <= r.end_day ? "default" : "secondary"}>
-          {today >= r.start_day && today <= r.end_day ? "Ativo" : "Fora"}
-        </Badge>
-      ),
-    },
-    { key: "scope", header: "Escopo", render: (r) => SCOPE_SCHED_LABEL[r.scope] },
-    {
-      key: "status", header: "Status",
-      render: (r) => <Badge variant={r.status === "ativo" ? "default" : "secondary"}>{r.status}</Badge>,
-    },
-    {
-      key: "acoes", header: "",
-      render: (r) => (
-        <div className="flex gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditItem(r)}><Pencil className="h-4 w-4" /></Button>
-          <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive"
-            onClick={() => deleteMutation.mutate(r.id)}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-    },
-  ];
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Dia atual: <strong>{today}</strong></p>
-        <Button size="sm" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />Nova entrada</Button>
-      </div>
-      {isLoading ? (
-        <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-      ) : (
-        <DataTable data={schedules ?? []} columns={columns} />
-      )}
-      {open && <ScheduleDialog onClose={() => setOpen(false)} />}
-      {editItem && <ScheduleDialog schedule={editItem} onClose={() => setEditItem(null)} />}
-    </div>
-  );
-}
-
-function ScheduleDialog({ schedule, onClose }: { schedule?: CompanySchedule; onClose: () => void }) {
-  const queryClient = useQueryClient();
-  const isEdit = !!schedule;
-  const [enterpriseName, setEnterpriseName] = useState(schedule?.enterprise_name ?? "");
-  const [startDay, setStartDay] = useState(String(schedule?.start_day ?? "1"));
-  const [endDay, setEndDay] = useState(String(schedule?.end_day ?? "10"));
-  const [scope, setScope] = useState<string>(schedule?.scope ?? "ambos");
-  const [status, setStatus] = useState<string>(schedule?.status ?? "ativo");
-
-  const mutation = useMutation({
-    mutationFn: () => {
-      const body = { enterprise_name: enterpriseName, start_day: Number(startDay), end_day: Number(endDay), scope, status };
-      return isEdit
-        ? api.patch(`/parameters/cronograma/${schedule!.id}`, body)
-        : api.post("/parameters/cronograma", body);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["company-schedule"] });
-      toast.success(isEdit ? "Cronograma atualizado!" : "Cronograma criado!");
-      onClose();
-    },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : "Erro ao salvar."),
-  });
-
-  const canSave = enterpriseName.trim() && Number(startDay) >= 1 && Number(endDay) >= Number(startDay);
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{isEdit ? "Editar cronograma" : "Nova entrada"}</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-1">
-            <Label>Empreendimento (exato conforme BigQuery)</Label>
-            <Input value={enterpriseName} onChange={(e) => setEnterpriseName(e.target.value)} placeholder="Ex: Residencial Primavera" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>Dia inicial</Label>
-              <Input type="number" min={1} max={31} value={startDay} onChange={(e) => setStartDay(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Dia final</Label>
-              <Input type="number" min={1} max={31} value={endDay} onChange={(e) => setEndDay(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label>Escopo</Label>
-            <Select value={scope} onValueChange={setScope}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cobranca">Cobrança</SelectItem>
-                <SelectItem value="negativacao">Negativação</SelectItem>
-                <SelectItem value="ambos">Ambos</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {isEdit && (
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ativo">Ativo</SelectItem>
-                  <SelectItem value="inativo">Inativo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button disabled={!canSave || mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? "Salvando..." : "Salvar"}
+            {mutation.isPending ? "Salvando…" : "Salvar"}
           </Button>
         </DialogFooter>
       </DialogContent>

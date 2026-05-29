@@ -2,6 +2,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface Column<T> {
   key: string;
@@ -17,12 +18,14 @@ export function DataTable<T extends { id: string }>({
   pageSize = 10,
   emptyMessage = "Nenhum registro encontrado",
   onRowClick,
+  rowClassName,
 }: {
   data: T[];
   columns: Column<T>[];
   pageSize?: number;
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
+  rowClassName?: (row: T) => string;
 }) {
   const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -81,7 +84,7 @@ export function DataTable<T extends { id: string }>({
             pageData.map((row) => (
               <TableRow
                 key={row.id}
-                className={onRowClick ? "cursor-pointer" : ""}
+                className={cn(onRowClick ? "cursor-pointer" : "", rowClassName?.(row) ?? "")}
                 onClick={() => onRowClick?.(row)}
               >
                 {columns.map((c) => (
