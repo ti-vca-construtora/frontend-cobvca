@@ -21,6 +21,7 @@ import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
 import { Route as LayoutNegativacaoIndexRouteImport } from './routes/_layout/negativacao/index'
 import { Route as LayoutNegativacaoRetiradasRouteImport } from './routes/_layout/negativacao/retiradas'
 import { Route as LayoutCobrancaNovoProcessoRouteImport } from './routes/_layout/cobranca/novo-processo'
+import { Route as LayoutCobrancaMinhasDistribuicoesRouteImport } from './routes/_layout/cobranca/minhas-distribuicoes'
 import { Route as LayoutCobrancaMeusProcessosRouteImport } from './routes/_layout/cobranca/meus-processos'
 import { Route as LayoutAdminTratativaInternaRouteImport } from './routes/_layout/admin/tratativa-interna'
 import { Route as LayoutAdminEmpreendimentoRouteImport } from './routes/_layout/admin/empreendimento'
@@ -87,6 +88,12 @@ const LayoutCobrancaNovoProcessoRoute =
     path: '/novo-processo',
     getParentRoute: () => LayoutCobrancaRoute,
   } as any)
+const LayoutCobrancaMinhasDistribuicoesRoute =
+  LayoutCobrancaMinhasDistribuicoesRouteImport.update({
+    id: '/minhas-distribuicoes',
+    path: '/minhas-distribuicoes',
+    getParentRoute: () => LayoutCobrancaRoute,
+  } as any)
 const LayoutCobrancaMeusProcessosRoute =
   LayoutCobrancaMeusProcessosRouteImport.update({
     id: '/meus-processos',
@@ -124,6 +131,7 @@ export interface FileRoutesByFullPath {
   '/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
   '/admin/tratativa-interna': typeof LayoutAdminTratativaInternaRoute
   '/cobranca/meus-processos': typeof LayoutCobrancaMeusProcessosRoute
+  '/cobranca/minhas-distribuicoes': typeof LayoutCobrancaMinhasDistribuicoesRoute
   '/cobranca/novo-processo': typeof LayoutCobrancaNovoProcessoRoute
   '/negativacao/retiradas': typeof LayoutNegativacaoRetiradasRoute
   '/negativacao/': typeof LayoutNegativacaoIndexRoute
@@ -140,6 +148,7 @@ export interface FileRoutesByTo {
   '/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
   '/admin/tratativa-interna': typeof LayoutAdminTratativaInternaRoute
   '/cobranca/meus-processos': typeof LayoutCobrancaMeusProcessosRoute
+  '/cobranca/minhas-distribuicoes': typeof LayoutCobrancaMinhasDistribuicoesRoute
   '/cobranca/novo-processo': typeof LayoutCobrancaNovoProcessoRoute
   '/negativacao/retiradas': typeof LayoutNegativacaoRetiradasRoute
   '/negativacao': typeof LayoutNegativacaoIndexRoute
@@ -159,6 +168,7 @@ export interface FileRoutesById {
   '/_layout/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
   '/_layout/admin/tratativa-interna': typeof LayoutAdminTratativaInternaRoute
   '/_layout/cobranca/meus-processos': typeof LayoutCobrancaMeusProcessosRoute
+  '/_layout/cobranca/minhas-distribuicoes': typeof LayoutCobrancaMinhasDistribuicoesRoute
   '/_layout/cobranca/novo-processo': typeof LayoutCobrancaNovoProcessoRoute
   '/_layout/negativacao/retiradas': typeof LayoutNegativacaoRetiradasRoute
   '/_layout/negativacao/': typeof LayoutNegativacaoIndexRoute
@@ -178,6 +188,7 @@ export interface FileRouteTypes {
     | '/admin/empreendimento'
     | '/admin/tratativa-interna'
     | '/cobranca/meus-processos'
+    | '/cobranca/minhas-distribuicoes'
     | '/cobranca/novo-processo'
     | '/negativacao/retiradas'
     | '/negativacao/'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/admin/empreendimento'
     | '/admin/tratativa-interna'
     | '/cobranca/meus-processos'
+    | '/cobranca/minhas-distribuicoes'
     | '/cobranca/novo-processo'
     | '/negativacao/retiradas'
     | '/negativacao'
@@ -212,6 +224,7 @@ export interface FileRouteTypes {
     | '/_layout/admin/empreendimento'
     | '/_layout/admin/tratativa-interna'
     | '/_layout/cobranca/meus-processos'
+    | '/_layout/cobranca/minhas-distribuicoes'
     | '/_layout/cobranca/novo-processo'
     | '/_layout/negativacao/retiradas'
     | '/_layout/negativacao/'
@@ -308,6 +321,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutCobrancaNovoProcessoRouteImport
       parentRoute: typeof LayoutCobrancaRoute
     }
+    '/_layout/cobranca/minhas-distribuicoes': {
+      id: '/_layout/cobranca/minhas-distribuicoes'
+      path: '/minhas-distribuicoes'
+      fullPath: '/cobranca/minhas-distribuicoes'
+      preLoaderRoute: typeof LayoutCobrancaMinhasDistribuicoesRouteImport
+      parentRoute: typeof LayoutCobrancaRoute
+    }
     '/_layout/cobranca/meus-processos': {
       id: '/_layout/cobranca/meus-processos'
       path: '/meus-processos'
@@ -357,11 +377,14 @@ const LayoutAdminRouteWithChildren = LayoutAdminRoute._addFileChildren(
 
 interface LayoutCobrancaRouteChildren {
   LayoutCobrancaMeusProcessosRoute: typeof LayoutCobrancaMeusProcessosRoute
+  LayoutCobrancaMinhasDistribuicoesRoute: typeof LayoutCobrancaMinhasDistribuicoesRoute
   LayoutCobrancaNovoProcessoRoute: typeof LayoutCobrancaNovoProcessoRoute
 }
 
 const LayoutCobrancaRouteChildren: LayoutCobrancaRouteChildren = {
   LayoutCobrancaMeusProcessosRoute: LayoutCobrancaMeusProcessosRoute,
+  LayoutCobrancaMinhasDistribuicoesRoute:
+    LayoutCobrancaMinhasDistribuicoesRoute,
   LayoutCobrancaNovoProcessoRoute: LayoutCobrancaNovoProcessoRoute,
 }
 

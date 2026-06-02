@@ -21,7 +21,7 @@ interface Enterprise {
   id: string;
   cost_center_source: string;
   cost_center_id: string;
-  enterprise_type: "lote" | "habitacao" | null;
+  enterprise_type: "loteamento" | "incorporação" | null;
   status: "ativo" | "inativo";
   is_multiplique: boolean;
 }
@@ -124,8 +124,8 @@ function Conteudo() {
               <SelectValue placeholder="Definir…" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="lote">Lote</SelectItem>
-              <SelectItem value="habitacao">Habitação</SelectItem>
+              <SelectItem value="loteamento">Loteamento</SelectItem>
+              <SelectItem value="incorporação">Incorporação</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -33,8 +33,15 @@ interface Tratativa {
 
 interface Enterprise {
   id: string;
-  cost_center_source: string;
-  cost_center_id: string;
+  cost_center_source?: string;
+  cost_center_id?: string;
+  cost_center_name?: string;
+}
+
+interface BulkCreateResult {
+  processed: number;
+  created: number;
+  errors?: Array<{ line: number; message: string }>;
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
@@ -58,7 +65,7 @@ function TratativaPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/internal-handling/${id}`),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["internal-handling"] });
       toast.success("Tratativa removida.");
     },
@@ -69,7 +76,12 @@ function TratativaPage() {
 
   const enterpriseLabel = (id: string) => {
     const e = enterprises?.find((e) => e.id === id);
-    return e ? `${e.cost_center_source} - ${e.cost_center_id}` : id;
+    if (!e) return id;
+    if (e.cost_center_name) return e.cost_center_name;
+    if (e.cost_center_source || e.cost_center_id) {
+      return `${e.cost_center_source ?? ""}${e.cost_center_source && e.cost_center_id ? " - " : ""}${e.cost_center_id ?? ""}`;
+    }
+    return id;
   };
 
   const colunas: Column<Tratativa>[] = [
@@ -145,11 +157,15 @@ function BulkUploadButton() {
     mutationFn: (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      return api.postForm("/internal-handling/bulk", fd);
+      return api.postForm<BulkCreateResult>("/internal-handling/bulk", fd);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["internal-handling"] });
-      toast.success("Importação concluída!");
+      if ((res.errors?.length ?? 0) > 0) {
+        toast.warning(`Importacao concluida com alertas: ${res.created}/${res.processed} criada(s).`);
+        return;
+      }
+      toast.success(`Importacao concluida: ${res.created}/${res.processed} criada(s).`);
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Erro na importação.");
@@ -164,7 +180,7 @@ function BulkUploadButton() {
       onClick={() => {
         const input = document.createElement("input");
         input.type = "file";
-        input.accept = ".csv";
+        input.accept = ".csv,text/csv";
         input.onchange = () => {
           const file = input.files?.[0];
           if (file) bulkMutation.mutate(file);
@@ -202,7 +218,13 @@ function TratativaDialog({
     mutationFn: () =>
       isEdit
         ? api.patch(`/internal-handling/${tratativa!.id}`, { clientName, enterpriseId, reason, status })
-        : api.post("/internal-handling", { document, clientName, enterpriseId, reason, status }),
+        : api.post("/internal-handling", {
+          document: document.replace(/\D/g, ""),
+          clientName,
+          enterpriseId,
+          reason,
+          status,
+        }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["internal-handling"] });
       toast.success(isEdit ? "Tratativa atualizada!" : "Tratativa criada!");
@@ -239,7 +261,7 @@ function TratativaDialog({
               <SelectContent>
                 {enterprises.map((e) => (
                   <SelectItem key={e.id} value={e.id}>
-                    {e.cost_center_source} - {e.cost_center_id}
+                    {e.cost_center_name ?? `${e.cost_center_source ?? ""}${e.cost_center_source && e.cost_center_id ? " - " : ""}${e.cost_center_id ?? ""}`}
                   </SelectItem>
                 ))}
               </SelectContent>

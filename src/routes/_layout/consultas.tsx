@@ -19,6 +19,7 @@ export const Route = createFileRoute("/_layout/consultas")({ component: Consulta
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type BqRow = { id: string } & Record<string, unknown>;
+type BqResponse = { data?: BqRow[]; count?: number; page?: number; pageSize?: number; totalPages?: number };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -60,13 +61,60 @@ function TabelaBq({ endpoint, queryKey }: { endpoint: string; queryKey: string }
     refetch,
   } = useQuery<BqRow[], ApiError>({
     queryKey: [queryKey, option, client, enterprise, limit],
-    queryFn: () =>
-      api.get<BqRow[]>(endpoint, {
-        option: option !== "all" ? option : undefined,
+    queryFn: async () => {
+      const limitValue = limit.trim();
+      const requestOption =
+        endpoint === "/bq/contas-receber"
+          ? "charge"
+          : (option !== "all" ? option : undefined);
+
+      // Campo "Limite" vazio: buscar todos os registros paginando pela API.
+      if (!limitValue) {
+        const first = await api.post<BqResponse>(endpoint, {
+          option: requestOption,
+          client: client.trim() || undefined,
+          enterprise: enterprise.trim() || undefined,
+          page: 1,
+          pageSize: 5000,
+        });
+
+        const firstRows = first.data ?? [];
+        const totalPages = Math.max(1, Number(first.totalPages ?? 1));
+        if (totalPages === 1) return firstRows;
+
+        const pages = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, i) =>
+            api.post<BqResponse>(endpoint, {
+              option: requestOption,
+              client: client.trim() || undefined,
+              enterprise: enterprise.trim() || undefined,
+              page: i + 2,
+              pageSize: 5000,
+            }),
+          ),
+        );
+
+        return [firstRows, ...pages.map((p) => p.data ?? [])].flat();
+      }
+
+      if (endpoint === "/bq/contas-receber") {
+        const response = await api.post<BqRow[] | BqResponse>(endpoint, {
+          option: requestOption,
+          client: client.trim() || undefined,
+          enterprise: enterprise.trim() || undefined,
+          limit: Number(limitValue),
+        });
+        return Array.isArray(response) ? response : (response.data ?? []);
+      }
+
+      const response = await api.post<BqRow[] | BqResponse>(endpoint, {
+        option: requestOption,
         client: client.trim() || undefined,
         enterprise: enterprise.trim() || undefined,
-        limit: limit.trim() || undefined,
-      }),
+        limit: Number(limitValue),
+      });
+      return Array.isArray(response) ? response : (response.data ?? []);
+    },
     enabled,
     staleTime: 1000 * 60 * 5,
     retry: false,
@@ -95,7 +143,7 @@ function TabelaBq({ endpoint, queryKey }: { endpoint: string; queryKey: string }
         </div>
       ),
     },
-    { key: "empresa", header: "Empreendimento", render: (r) => pick(r, ["empresa", "nomeEmpreendimento", "empreendimento"]) },
+    { key: "empresa", header: "Empreendimento", render: (r) => pick(r, ["centroCusto", "costCenterName", "empresa", "nomeEmpreendimento", "empreendimento"]) },
     {
       key: "valor", header: "Valor",
       render: (r) => {

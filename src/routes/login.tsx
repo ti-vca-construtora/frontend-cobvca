@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,10 +19,11 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   // Já autenticado → redireciona
-  if (usuario) {
-    navigate({ to: "/" });
-    return null;
-  }
+  useEffect(() => {
+    if (usuario) navigate({ to: "/" });
+  }, [usuario, navigate]);
+
+  if (usuario) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app/PageHeader";
 import { ProtectedRoute } from "@/components/app/ProtectedRoute";
 import { DataTable, type Column } from "@/components/app/DataTable";
+import { ClientGroupedItems } from "@/components/app/ClientGroupedItems";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "sonner";
+import { groupTitleItems } from "@/components/app/ClientGroupedItems";
 
 export const Route = createFileRoute("/_layout/cobranca/meus-processos")({ component: MeusProcessosPage });
 
@@ -29,8 +31,7 @@ export const Route = createFileRoute("/_layout/cobranca/meus-processos")({ compo
 interface ChargeBatch {
   id: string;
   batch_code: string;
-  source_view: string;
-  filters_applied: Record<string, unknown>;
+  enterprise_ids?: string[];
   status: "pendente" | "em_andamento" | "concluido" | "cancelado";
   created_by_user_id: string;
   created_at: string;
@@ -52,6 +53,8 @@ interface ChargeItem {
   feedback_notes: string | null;
   internal_handling_flag: boolean;
   legal_process_flag: boolean;
+  source_base?: string | null;
+  sync_status?: "nao_sincronizado" | "sincronizado" | "alterado" | "pago" | "processo_juridico" | "tratativa_interna";
 }
 
 interface AppUser {
@@ -69,6 +72,25 @@ interface BqProcesso {
   tipoProcesso: string | null;
   numero: string | null;
   nomeEmpreendimento: string | null;
+}
+
+interface InternalHandling {
+  id: string;
+  document: string;
+  status: "ativo" | "inativo";
+}
+
+interface PaginatedBqResponse<T> {
+  count: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  data: T[];
+}
+
+interface BqUpdatePayload {
+  vca: string[];
+  lotear: string[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -91,6 +113,29 @@ const ITEM_STATUS_LABEL: Record<string, string> = {
 };
 
 const WIZARD_STEPS = ["Resumo", "Processos Juridicos", "Tratativas Internas", "Distribuicao"] as const;
+
+async function fetchAllProcessosJuridicos(pageSize = 200): Promise<BqProcesso[]> {
+  const first = await api.post<PaginatedBqResponse<BqProcesso>>("/bq/processos-juridicos", {
+    page: 1,
+    pageSize,
+  });
+
+  const totalPages = Math.max(1, Number(first.totalPages || 1));
+  if (totalPages === 1) {
+    return first.data ?? [];
+  }
+
+  const pages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, i) =>
+      api.post<PaginatedBqResponse<BqProcesso>>("/bq/processos-juridicos", {
+        page: i + 2,
+        pageSize,
+      }),
+    ),
+  );
+
+  return [first, ...pages].flatMap((response) => response.data ?? []);
+}
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -194,7 +239,7 @@ function BatchTable({ batches, onIniciar }: { batches: ChargeBatch[]; onIniciar:
     {
       key: "source",
       header: "Fonte",
-      accessor: (r) => r.source_view === "vw_cob_contasreceber" ? "Contas a Receber" : "Contas Recebidas",
+      accessor: () => "Cobranca",
     },
     {
       key: "created_at",
@@ -203,7 +248,7 @@ function BatchTable({ batches, onIniciar }: { batches: ChargeBatch[]; onIniciar:
     },
     {
       key: "actions",
-      header: "",
+      header: "Acao",
       render: (r) =>
         (r.status === "pendente" || r.status === "em_andamento") ? (
           <Button
@@ -238,7 +283,7 @@ function BatchCards({ batches, onIniciar }: { batches: ChargeBatch[]; onIniciar:
           <CardContent className="space-y-2 text-sm">
             <BatchStatusBadge status={b.status} />
             <p className="text-muted-foreground text-xs">
-              {b.source_view === "vw_cob_contasreceber" ? "Contas a Receber" : "Contas Recebidas"}
+              Cobranca
             </p>
             <p className="text-muted-foreground text-xs">
               Criado em {new Date(b.created_at).toLocaleDateString("pt-BR")}
@@ -268,8 +313,9 @@ function BatchCards({ batches, onIniciar }: { batches: ChargeBatch[]; onIniciar:
 function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
-  const [selectedUserId, setSelectedUserId] = useState("");
   const [feedbackItem, setFeedbackItem] = useState<ChargeItem | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [showDistributionPreview, setShowDistributionPreview] = useState(false);
 
   const { data: items = [], isLoading: itemsLoading } = useQuery<ChargeItem[]>({
     queryKey: ["batch-items", batch.id],
@@ -278,8 +324,16 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
 
   const { data: bqProcessos = [], isLoading: processosBqLoading } = useQuery<BqProcesso[]>({
     queryKey: ["bq-processos-juridicos"],
-    queryFn: () => api.get<BqProcesso[]>("/bq/processos-juridicos"),
+    queryFn: () => fetchAllProcessosJuridicos(200),
     enabled: step === 2,
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+  });
+
+  const { data: internalHandling = [], isLoading: internalHandlingLoading } = useQuery<InternalHandling[]>({
+    queryKey: ["internal-handling"],
+    queryFn: () => api.get<InternalHandling[]>("/internal-handling"),
+    enabled: step >= 3,
     staleTime: 1000 * 60 * 5,
     retry: false,
   });
@@ -289,25 +343,172 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
   const bqProcessoDocsSet = new Set(
     bqProcessos.map((p) => normalizeDoc(p.documento ?? "")).filter(Boolean),
   );
+  const internalHandlingDocsSet = new Set(
+    internalHandling
+      .filter((t) => t.status === "ativo")
+      .map((t) => normalizeDoc(t.document ?? ""))
+      .filter(Boolean),
+  );
 
   const { data: users = [] } = useQuery<AppUser[]>({
     queryKey: ["users"],
     queryFn: () => api.get<AppUser[]>("/users"),
     enabled: step === 4,
   });
+  const cobradores = users.filter((u) => u.role === "cobrador" || u.role === "supervisor" || u.role === "administrador");
 
   const startMutation = useMutation({
     mutationFn: () => api.patch(`/charges/${batch.id}/status`, { status: "em_andamento" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["charge-batches"] });
-      setStep(2);
+      syncBeforeStep2Mutation.mutate();
     },
     onError: (err) => toast.error(err instanceof ApiError ? err.message : "Erro ao iniciar processo."),
   });
 
+  const syncBeforeStep2Mutation = useMutation({
+    mutationFn: async () => {
+      const billIdsByBase = items.reduce(
+        (acc, item) => {
+          const rawBillId = String(item.bill_id ?? "").split("#")[0].trim();
+          if (!/^\d+$/.test(rawBillId)) return acc;
+
+          const base = (item.source_base ?? "").toLowerCase();
+          if (base === "lot" || base === "lotear") {
+            acc.lotear.push(rawBillId);
+            acc.itemIds.add(item.id);
+            return acc;
+          }
+
+          acc.vca.push(rawBillId);
+          acc.itemIds.add(item.id);
+          return acc;
+        },
+        { vca: [] as string[], lotear: [] as string[], itemIds: new Set<string>() },
+      );
+
+      const payload: BqUpdatePayload = {
+        vca: Array.from(new Set(billIdsByBase.vca)),
+        lotear: Array.from(new Set(billIdsByBase.lotear)),
+      };
+
+      if (payload.vca.length === 0 && payload.lotear.length === 0) {
+        return;
+      }
+
+      await api.post("/bq/update", payload);
+
+      await Promise.all(
+        Array.from(billIdsByBase.itemIds).map((itemId) =>
+          api.patch(`/charges/items/${itemId}/sync-status`, { syncStatus: "sincronizado" }),
+        ),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["batch-items", batch.id] });
+      setStep(2);
+    },
+    onError: (err) => {
+      toast.warning(err instanceof ApiError
+        ? `${err.message} Seguindo sem sincronizacao prévia.`
+        : "Erro ao sincronizar títulos. Seguindo sem sincronizacao prévia.");
+      setStep(2);
+    },
+  });
+
+  const updateSyncStatusForItems = async (
+    itemIds: string[],
+    syncStatus: "sincronizado" | "processo_juridico" | "tratativa_interna",
+  ) => {
+    if (itemIds.length === 0) return;
+    await Promise.all(
+      itemIds.map((itemId) =>
+        api.patch(`/charges/items/${itemId}/sync-status`, { syncStatus }),
+      ),
+    );
+  };
+
+  const legalItemIds = useMemo(
+    () =>
+      items
+        .filter((i) => i.document && bqProcessoDocsSet.has(normalizeDoc(i.document)))
+        .map((i) => i.id),
+    [items, bqProcessoDocsSet],
+  );
+
+  const internalItemIds = useMemo(
+    () =>
+      items
+        .filter((i) => {
+          const doc = i.document ? normalizeDoc(i.document) : "";
+          return i.internal_handling_flag || (!!doc && internalHandlingDocsSet.has(doc));
+        })
+        .map((i) => i.id),
+    [items, internalHandlingDocsSet],
+  );
+
+  const elegiveisDistribuicao = items.filter((i) =>
+    !(i.document && (bqProcessoDocsSet.has(normalizeDoc(i.document)) || internalHandlingDocsSet.has(normalizeDoc(i.document)))),
+  );
+  const legalItems = items.filter((i) => i.legal_process_flag);
+  const internalItems = items.filter((i) => {
+    const doc = i.document ? normalizeDoc(i.document) : "";
+    return i.internal_handling_flag || (!!doc && internalHandlingDocsSet.has(doc));
+  });
+  const totalTitulos = useMemo(() => groupTitleItems(items).length, [items]);
+  const titulosJuridicos = useMemo(
+    () => groupTitleItems(legalItems, bqProcessoDocsSet).length,
+    [legalItems, bqProcessoDocsSet],
+  );
+  const titulosTratativa = useMemo(
+    () => groupTitleItems(internalItems, undefined, internalHandlingDocsSet).length,
+    [internalItems, internalHandlingDocsSet],
+  );
+  const gruposDistribuicao = useMemo(
+    () => groupTitleItems(elegiveisDistribuicao),
+    [elegiveisDistribuicao],
+  );
+
+  const cobradoresOrdenados = useMemo(
+    () =>
+      [...cobradores].sort((a, b) =>
+        a.fullName.localeCompare(b.fullName, "pt-BR", { sensitivity: "base" }),
+      ),
+    [cobradores],
+  );
+
+  const colaboradoresSelecionados = useMemo(
+    () => cobradoresOrdenados.filter((u) => selectedUserIds.includes(u.userId)),
+    [cobradoresOrdenados, selectedUserIds],
+  );
+
+  const planoDistribuicao = useMemo(() => {
+    const total = gruposDistribuicao.length;
+    const totalUsers = colaboradoresSelecionados.length;
+    if (total === 0 || totalUsers === 0) return [];
+
+    const base = Math.floor(total / totalUsers);
+    const resto = total % totalUsers;
+    let cursor = 0;
+
+    return colaboradoresSelecionados.map((u, index) => {
+      const quantidade = base + (index < resto ? 1 : 0);
+      const grupos = gruposDistribuicao.slice(cursor, cursor + quantidade);
+      const itemIds = grupos.flatMap((grupo) => grupo.items.map((item) => item.id));
+      cursor += quantidade;
+      return { user: u, itemIds };
+    }).filter((p) => p.itemIds.length > 0);
+  }, [colaboradoresSelecionados, gruposDistribuicao]);
+
   const assignMutation = useMutation({
-    mutationFn: () =>
-      api.patch("/charges/items/assign", { batchId: batch.id, assignedToUserId: selectedUserId }),
+    mutationFn: async () => {
+      for (const grupo of planoDistribuicao) {
+        await api.patch("/charges/items/assign", {
+          assignedToUserId: grupo.user.userId,
+          itemIds: grupo.itemIds,
+        });
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["charge-batches"] });
       queryClient.invalidateQueries({ queryKey: ["batch-items", batch.id] });
@@ -317,17 +518,14 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
     onError: (err) => toast.error(err instanceof ApiError ? err.message : "Erro ao distribuir itens."),
   });
 
-  const legalItems = items.filter((i) => i.legal_process_flag);
-  const internalItems = items.filter((i) => i.internal_handling_flag);
-  const cobradores = users.filter((u) => u.role === "cobrador" || u.role === "supervisor" || u.role === "administrador");
-
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-[640px] sm:max-w-[640px] overflow-y-auto">
-        <SheetHeader className="mb-2">
+      <SheetContent className="w-screen max-w-none sm:w-screen sm:max-w-none h-screen max-h-screen flex flex-col">
+        <SheetHeader className="mb-2 shrink-0">
           <SheetTitle>Iniciar Processo — {batch.batch_code}</SheetTitle>
         </SheetHeader>
 
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
         {/* Step indicator */}
         <div className="flex items-center gap-1 mb-6 overflow-x-auto">
           {WIZARD_STEPS.map((label, i) => {
@@ -362,7 +560,7 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Fonte</span>
-                <span>{batch.source_view === "vw_cob_contasreceber" ? "Contas a Receber" : "Contas Recebidas"}</span>
+                <span>Cobranca</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Criado em</span>
@@ -394,7 +592,9 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
               ) : items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhum titulo encontrado.</p>
               ) : (
-                <div className="rounded-md border divide-y text-sm">
+                <>
+                  <ClientGroupedItems items={items} />
+                {false && <div className="rounded-md border divide-y text-sm max-h-[360px] overflow-y-auto">
                   {items.map((item) => (
                     <div key={item.id} className="flex items-center justify-between px-3 py-2 gap-4">
                       <div className="min-w-0">
@@ -417,7 +617,8 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                       )}
                     </div>
                   ))}
-                </div>
+                </div>}
+                </>
               )}
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -427,7 +628,9 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                   {startMutation.isPending ? "Iniciando..." : "Iniciar processo"}
                 </Button>
               ) : (
-                <Button onClick={() => setStep(2)}>Continuar</Button>
+                <Button disabled={syncBeforeStep2Mutation.isPending} onClick={() => syncBeforeStep2Mutation.mutate()}>
+                  {syncBeforeStep2Mutation.isPending ? "Sincronizando..." : "Continuar"}
+                </Button>
               )}
             </div>
           </div>
@@ -439,6 +642,20 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
             <h3 className="font-semibold flex items-center gap-2">
               <Gavel className="h-4 w-4" />Processos Juridicos
             </h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md border p-3">
+                <p className="text-xs text-muted-foreground">Titulos do processo</p>
+                <p className="text-2xl font-semibold">{totalTitulos}</p>
+              </div>
+              <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                <p className="text-xs text-muted-foreground">Em processo juridico</p>
+                <p className="text-2xl font-semibold text-red-700">{titulosJuridicos}</p>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="text-xs text-muted-foreground">Restantes para seguir</p>
+                <p className="text-2xl font-semibold">{Math.max(totalTitulos - titulosJuridicos, 0)}</p>
+              </div>
+            </div>
 
             {itemsLoading || processosBqLoading ? (
               <div className="space-y-2">
@@ -460,7 +677,7 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                       </Badge>
                     )}
                   </div>
-                  <DataTable
+                  {false && <DataTable
                     data={items}
                     columns={[
                       { key: "client", header: "Cliente", accessor: (r) => r.client_name ?? "—" },
@@ -491,6 +708,11 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                         ? "bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-950/30"
                         : ""
                     }
+                  />}
+                  <ClientGroupedItems
+                    items={items}
+                    legalDocsSet={bqProcessoDocsSet}
+                    onItemClick={setFeedbackItem}
                   />
                 </div>
               );
@@ -498,7 +720,20 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
 
             <div className="flex justify-between pt-2">
               <Button variant="outline" onClick={() => setStep(1)}>Voltar</Button>
-              <Button onClick={() => setStep(3)}>
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateSyncStatusForItems(legalItemIds, "processo_juridico");
+                    queryClient.invalidateQueries({ queryKey: ["batch-items", batch.id] });
+                  } catch (err) {
+                    toast.warning(err instanceof ApiError
+                      ? `${err.message} Seguindo para a proxima etapa.`
+                      : "Erro ao atualizar status de processos juridicos. Seguindo para a proxima etapa.");
+                  } finally {
+                    setStep(3);
+                  }
+                }}
+              >
                 Proximo <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
@@ -511,7 +746,21 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
             <h3 className="font-semibold flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />Tratativas Internas
             </h3>
-            {itemsLoading ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md border p-3">
+                <p className="text-xs text-muted-foreground">Titulos do processo</p>
+                <p className="text-2xl font-semibold">{totalTitulos}</p>
+              </div>
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs text-muted-foreground">Em tratativa interna</p>
+                <p className="text-2xl font-semibold text-amber-700">{titulosTratativa}</p>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="text-xs text-muted-foreground">Titulos elegiveis apos filtros</p>
+                <p className="text-2xl font-semibold">{gruposDistribuicao.length}</p>
+              </div>
+            </div>
+            {itemsLoading || internalHandlingLoading ? (
               <Skeleton className="h-24 w-full" />
             ) : internalItems.length === 0 ? (
               <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
@@ -523,12 +772,29 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                   {internalItems.length} {internalItems.length === 1 ? "item possui" : "itens possuem"} tratativa interna.
                   Clique em um item para registrar feedback.
                 </p>
-                <ItemMiniTable items={internalItems} onItemClick={setFeedbackItem} />
+                <ClientGroupedItems
+                  items={internalItems}
+                  internalDocsSet={internalHandlingDocsSet}
+                  onItemClick={setFeedbackItem}
+                />
               </div>
             )}
             <div className="flex justify-between pt-2">
               <Button variant="outline" onClick={() => setStep(2)}>Voltar</Button>
-              <Button onClick={() => setStep(4)}>
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateSyncStatusForItems(internalItemIds, "tratativa_interna");
+                    queryClient.invalidateQueries({ queryKey: ["batch-items", batch.id] });
+                  } catch (err) {
+                    toast.warning(err instanceof ApiError
+                      ? `${err.message} Seguindo para a proxima etapa.`
+                      : "Erro ao atualizar status de tratativas internas. Seguindo para a proxima etapa.");
+                  } finally {
+                    setStep(4);
+                  }
+                }}
+              >
                 Proximo <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
@@ -542,27 +808,66 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
               <Users className="h-4 w-4" />Distribuicao
             </h3>
             <p className="text-sm text-muted-foreground">
-              Atribua todos os {items.length} itens do processo a um cobrador.
+              Selecione os colaboradores que participarao da distribuicao dos {gruposDistribuicao.length} titulos elegiveis.
             </p>
-            <div className="space-y-1">
-              <Label>Cobrador responsavel</Label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um usuario..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {cobradores.map((u) => (
-                    <SelectItem key={u.userId} value={u.userId}>
-                      {u.fullName} ({u.role})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Titulos elegiveis para distribuicao</p>
+              <ClientGroupedItems items={elegiveisDistribuicao} />
             </div>
+            <div className="space-y-2 rounded-md border p-3 text-sm">
+              <Label>Colaboradores</Label>
+              {cobradoresOrdenados.length === 0 ? (
+                <p className="text-muted-foreground">Nenhum colaborador disponivel para distribuicao.</p>
+              ) : (
+                <div className="space-y-2">
+                  {cobradoresOrdenados.map((u) => {
+                    const checked = selectedUserIds.includes(u.userId);
+                    return (
+                      <label key={u.userId} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            setShowDistributionPreview(false);
+                            setSelectedUserIds((prev) =>
+                              e.target.checked
+                                ? [...prev, u.userId]
+                                : prev.filter((id) => id !== u.userId),
+                            );
+                          }}
+                        />
+                        <span>{u.fullName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {selectedUserIds.length > 0 && (
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowDistributionPreview((v) => !v)}
+                >
+                  {showDistributionPreview ? "Ocultar preview" : "Preview da divisao"}
+                </Button>
+                {showDistributionPreview && (
+                  <div className="space-y-1 rounded-md border p-3 text-sm">
+                    {planoDistribuicao.map((grupo) => (
+                      <div key={grupo.user.userId} className="flex items-center justify-between">
+                        <span>{grupo.user.fullName}</span>
+                        <Badge variant="secondary">{grupo.itemIds.length} titulo(s)</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex justify-between pt-2">
               <Button variant="outline" onClick={() => setStep(3)}>Voltar</Button>
               <Button
-                disabled={!selectedUserId || assignMutation.isPending}
+                disabled={assignMutation.isPending || planoDistribuicao.length === 0 || gruposDistribuicao.length === 0}
                 onClick={() => assignMutation.mutate()}
               >
                 {assignMutation.isPending ? "Distribuindo..." : "Concluir e distribuir"}
@@ -571,6 +876,7 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
           </div>
         )}
 
+        </div>
         {/* Item feedback dialog (within wizard) */}
         {feedbackItem && (
           <ItemFeedbackDialog
