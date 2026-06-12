@@ -44,7 +44,7 @@ export function groupTitleItems(
   const groups = new Map<string, ClientItemGroup>();
 
   for (const item of items) {
-    const billId = item.bill_id ?? "Sem titulo";
+    const billId = item.bill_id ?? "Sem título";
     const clientName = item.client_name ?? "Sem cliente";
     const document = item.document ?? "sem documento";
     const enterpriseName = item.enterprise_name ?? "—";
@@ -88,7 +88,7 @@ export function ClientGroupedItems({ items, legalDocsSet, internalDocsSet, onIte
             <AccordionTrigger className="py-3">
               <div className={`flex w-full items-start justify-between gap-4 text-left ${group.hasLegal ? "text-red-700" : ""}`}>
                 <div className="min-w-0">
-                  <p className="font-medium truncate">Titulo: {group.billId}</p>
+                  <p className="font-medium truncate">Título: {group.billId}</p>
                   <p className="text-muted-foreground text-xs truncate">Cliente: {group.clientName}</p>
                   <p className="text-muted-foreground text-xs truncate">Documento: {group.document}</p>
                   <p className="text-muted-foreground text-xs truncate">Empreendimento: {group.enterpriseName}</p>
@@ -116,7 +116,7 @@ export function ClientGroupedItems({ items, legalDocsSet, internalDocsSet, onIte
                     onClick={() => onItemClick?.(item)}
                   >
                     <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground truncate">Parcela do titulo: {group.billId}</p>
+                      <p className="text-xs text-muted-foreground truncate">Parcela do título: {group.billId}</p>
                       <p className="text-xs text-muted-foreground">
                         {item.due_date ? new Date(item.due_date).toLocaleDateString("pt-BR") : "Sem vencimento"}
                       </p>

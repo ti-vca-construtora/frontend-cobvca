@@ -28,7 +28,7 @@ interface RetiradaItem {
 
 function RetiradasPage() {
   return (
-    <ProtectedRoute perfis={["administrador", "supervisor", "negativador"]}>
+    <ProtectedRoute perfis={["administrador", "negativador"]}>
       <PageHeader
         titulo="Retiradas"
         descricao="Itens negativados com pagamento identificado — aguardando confirmação de retirada"

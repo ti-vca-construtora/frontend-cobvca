@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app/PageHeader";
 import { ProtectedRoute } from "@/components/app/ProtectedRoute";
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutList, LayoutGrid, Plus, ChevronRight, Check,
+  LayoutList, LayoutGrid, Plus, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Check,
   PlayCircle, Users, AlertTriangle, Gavel, MessageCircle, Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,7 @@ interface ChargeItem {
   id: string;
   batch_id: string;
   bill_id: string;
+  assigned_to_user_id: string | null;
   document: string | null;
   client_name: string | null;
   enterprise_name: string | null;
@@ -98,7 +99,7 @@ interface BqUpdatePayload {
 const BATCH_STATUS_LABEL: Record<string, string> = {
   pendente: "Pendente",
   em_andamento: "Em andamento",
-  concluido: "Concluido",
+  concluido: "Concluído",
   cancelado: "Cancelado",
 };
 
@@ -107,12 +108,12 @@ const ITEM_STATUS_LABEL: Record<string, string> = {
   sem_retorno: "Sem retorno",
   em_atendimento: "Em atendimento",
   ciente_sem_retorno: "Ciente s/ retorno",
-  em_negociacao: "Em negociacao",
+  em_negociacao: "Em negociação",
   acordo: "Acordo",
   pago: "Pago",
 };
 
-const WIZARD_STEPS = ["Resumo", "Processos Juridicos", "Tratativas Internas", "Distribuicao"] as const;
+const WIZARD_STEPS = ["Resumo", "Processos Jurídicos", "Tratativas Internas", "Distribuição"] as const;
 
 async function fetchAllProcessosJuridicos(pageSize = 200): Promise<BqProcesso[]> {
   const first = await api.post<PaginatedBqResponse<BqProcesso>>("/bq/processos-juridicos", {
@@ -143,6 +144,7 @@ function MeusProcessosPage() {
   const [view, setView] = useState<"table" | "cards">("table");
   const [busca, setBusca] = useState("");
   const [iniciarBatch, setIniciarBatch] = useState<ChargeBatch | null>(null);
+  const [viewBatch, setViewBatch] = useState<ChargeBatch | null>(null);
 
   const { data: batches = [], isLoading } = useQuery<ChargeBatch[]>({
     queryKey: ["charge-batches"],
@@ -158,13 +160,13 @@ function MeusProcessosPage() {
     <ProtectedRoute perfis={["administrador", "supervisor", "cobrador"]}>
       <PageHeader
         titulo="Meus Processos"
-        descricao="Processos de cobranca em andamento"
+        descricao="Processos de cobrança em andamento"
         acoes={
           <div className="flex items-center gap-2">
             <Button
               variant={view === "table" ? "default" : "outline"}
               size="icon"
-              title="Visualizacao em tabela"
+              title="Visualização em tabela"
               onClick={() => setView("table")}
             >
               <LayoutList className="h-4 w-4" />
@@ -172,7 +174,7 @@ function MeusProcessosPage() {
             <Button
               variant={view === "cards" ? "default" : "outline"}
               size="icon"
-              title="Visualizacao em cards"
+              title="Visualização em cards"
               onClick={() => setView("cards")}
             >
               <LayoutGrid className="h-4 w-4" />
@@ -199,13 +201,16 @@ function MeusProcessosPage() {
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
         </div>
       ) : view === "table" ? (
-        <BatchTable batches={filtrados} onIniciar={setIniciarBatch} />
+        <BatchTable batches={filtrados} onIniciar={setIniciarBatch} onView={setViewBatch} />
       ) : (
-        <BatchCards batches={filtrados} onIniciar={setIniciarBatch} />
+        <BatchCards batches={filtrados} onIniciar={setIniciarBatch} onView={setViewBatch} />
       )}
 
       {iniciarBatch && (
         <IniciarWizard batch={iniciarBatch} onClose={() => setIniciarBatch(null)} />
+      )}
+      {viewBatch && (
+        <ProcessOverviewSheet batch={viewBatch} onClose={() => setViewBatch(null)} />
       )}
     </ProtectedRoute>
   );
@@ -228,9 +233,17 @@ function BatchStatusBadge({ status }: { status: string }) {
 
 // ─── Batch table view ─────────────────────────────────────────────────────────
 
-function BatchTable({ batches, onIniciar }: { batches: ChargeBatch[]; onIniciar: (b: ChargeBatch) => void }) {
+function BatchTable({
+  batches,
+  onIniciar,
+  onView,
+}: {
+  batches: ChargeBatch[];
+  onIniciar: (b: ChargeBatch) => void;
+  onView: (b: ChargeBatch) => void;
+}) {
   const columns: Column<ChargeBatch>[] = [
-    { key: "batch_code", header: "Codigo", accessor: (r) => r.batch_code },
+    { key: "batch_code", header: "Código", accessor: (r) => r.batch_code },
     {
       key: "status",
       header: "Status",
@@ -248,18 +261,35 @@ function BatchTable({ batches, onIniciar }: { batches: ChargeBatch[]; onIniciar:
     },
     {
       key: "actions",
-      header: "Acao",
-      render: (r) =>
-        (r.status === "pendente" || r.status === "em_andamento") ? (
-          <Button
-            size="sm"
-            variant={r.status === "em_andamento" ? "outline" : "default"}
-            onClick={(e) => { e.stopPropagation(); onIniciar(r); }}
-          >
-            <PlayCircle className="mr-1 h-4 w-4" />
-            {r.status === "pendente" ? "Iniciar" : "Continuar"}
-          </Button>
-        ) : null,
+      header: "Ação",
+      render: (r) => {
+        if (r.status === "pendente" || r.status === "em_andamento") {
+          return (
+            <Button
+              size="sm"
+              variant={r.status === "em_andamento" ? "outline" : "default"}
+              onClick={(e) => { e.stopPropagation(); onIniciar(r); }}
+            >
+              <PlayCircle className="mr-1 h-4 w-4" />
+              {r.status === "pendente" ? "Iniciar" : "Continuar"}
+            </Button>
+          );
+        }
+
+        if (r.status === "concluido") {
+          return (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => { e.stopPropagation(); onView(r); }}
+            >
+              Ver processo
+            </Button>
+          );
+        }
+
+        return null;
+      }
     },
   ];
 
@@ -268,7 +298,15 @@ function BatchTable({ batches, onIniciar }: { batches: ChargeBatch[]; onIniciar:
 
 // ─── Batch cards view ─────────────────────────────────────────────────────────
 
-function BatchCards({ batches, onIniciar }: { batches: ChargeBatch[]; onIniciar: (b: ChargeBatch) => void }) {
+function BatchCards({
+  batches,
+  onIniciar,
+  onView,
+}: {
+  batches: ChargeBatch[];
+  onIniciar: (b: ChargeBatch) => void;
+  onView: (b: ChargeBatch) => void;
+}) {
   if (batches.length === 0) {
     return <p className="text-sm text-muted-foreground">Nenhum processo encontrado.</p>;
   }
@@ -289,16 +327,16 @@ function BatchCards({ batches, onIniciar }: { batches: ChargeBatch[]; onIniciar:
               Criado em {new Date(b.created_at).toLocaleDateString("pt-BR")}
             </p>
           </CardContent>
-          {(b.status === "pendente" || b.status === "em_andamento") && (
+          {(b.status === "pendente" || b.status === "em_andamento" || b.status === "concluido") && (
             <CardFooter>
               <Button
                 size="sm"
                 className="w-full"
-                variant={b.status === "em_andamento" ? "outline" : "default"}
-                onClick={() => onIniciar(b)}
+                variant={b.status === "pendente" ? "default" : "outline"}
+                onClick={() => (b.status === "concluido" ? onView(b) : onIniciar(b))}
               >
-                <PlayCircle className="mr-1 h-4 w-4" />
-                {b.status === "pendente" ? "Iniciar" : "Continuar"}
+                {b.status !== "concluido" && <PlayCircle className="mr-1 h-4 w-4" />}
+                {b.status === "pendente" ? "Iniciar" : b.status === "em_andamento" ? "Continuar" : "Ver processo"}
               </Button>
             </CardFooter>
           )}
@@ -315,6 +353,8 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
   const [step, setStep] = useState(1);
   const [feedbackItem, setFeedbackItem] = useState<ChargeItem | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [availableFocusedUserId, setAvailableFocusedUserId] = useState<string | null>(null);
+  const [selectedFocusedUserId, setSelectedFocusedUserId] = useState<string | null>(null);
   const [showDistributionPreview, setShowDistributionPreview] = useState(false);
 
   const { data: items = [], isLoading: itemsLoading } = useQuery<ChargeItem[]>({
@@ -436,6 +476,12 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
     [items, bqProcessoDocsSet],
   );
 
+  const legalItemsFromCurrentCheck = useMemo(
+    () =>
+      items.filter((i) => i.document && bqProcessoDocsSet.has(normalizeDoc(i.document))),
+    [items, bqProcessoDocsSet],
+  );
+
   const internalItemIds = useMemo(
     () =>
       items
@@ -450,15 +496,14 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
   const elegiveisDistribuicao = items.filter((i) =>
     !(i.document && (bqProcessoDocsSet.has(normalizeDoc(i.document)) || internalHandlingDocsSet.has(normalizeDoc(i.document)))),
   );
-  const legalItems = items.filter((i) => i.legal_process_flag);
   const internalItems = items.filter((i) => {
     const doc = i.document ? normalizeDoc(i.document) : "";
     return i.internal_handling_flag || (!!doc && internalHandlingDocsSet.has(doc));
   });
   const totalTitulos = useMemo(() => groupTitleItems(items).length, [items]);
   const titulosJuridicos = useMemo(
-    () => groupTitleItems(legalItems, bqProcessoDocsSet).length,
-    [legalItems, bqProcessoDocsSet],
+    () => groupTitleItems(legalItemsFromCurrentCheck, bqProcessoDocsSet).length,
+    [legalItemsFromCurrentCheck, bqProcessoDocsSet],
   );
   const titulosTratativa = useMemo(
     () => groupTitleItems(internalItems, undefined, internalHandlingDocsSet).length,
@@ -468,7 +513,17 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
     () => groupTitleItems(elegiveisDistribuicao),
     [elegiveisDistribuicao],
   );
-
+  const gruposDistribuicaoOrdenados = useMemo(
+    () =>
+      [...gruposDistribuicao].sort((a, b) => {
+        const byClient = a.clientName.localeCompare(b.clientName, "pt-BR", { sensitivity: "base" });
+        if (byClient !== 0) return byClient;
+        const byEnterprise = a.enterpriseName.localeCompare(b.enterpriseName, "pt-BR", { sensitivity: "base" });
+        if (byEnterprise !== 0) return byEnterprise;
+        return a.billId.localeCompare(b.billId, "pt-BR", { sensitivity: "base" });
+      }),
+    [gruposDistribuicao],
+  );
   const cobradoresOrdenados = useMemo(
     () =>
       [...cobradores].sort((a, b) =>
@@ -476,14 +531,36 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
       ),
     [cobradores],
   );
+  const cobradoresIds = useMemo(
+    () => new Set(cobradoresOrdenados.map((user) => user.userId)),
+    [cobradoresOrdenados],
+  );
+
+  useEffect(() => {
+    setSelectedUserIds((prev) => {
+      const next = prev.filter((id) => cobradoresIds.has(id));
+      if (next.length === prev.length && next.every((id, index) => id === prev[index])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [cobradoresIds]);
+
+  const colaboradoresDisponiveis = useMemo(
+    () => cobradoresOrdenados.filter((u) => !selectedUserIds.includes(u.userId)),
+    [cobradoresOrdenados, selectedUserIds],
+  );
 
   const colaboradoresSelecionados = useMemo(
-    () => cobradoresOrdenados.filter((u) => selectedUserIds.includes(u.userId)),
+    () =>
+      selectedUserIds
+        .map((userId) => cobradoresOrdenados.find((u) => u.userId === userId))
+        .filter((u): u is AppUser => !!u),
     [cobradoresOrdenados, selectedUserIds],
   );
 
   const planoDistribuicao = useMemo(() => {
-    const total = gruposDistribuicao.length;
+    const total = gruposDistribuicaoOrdenados.length;
     const totalUsers = colaboradoresSelecionados.length;
     if (total === 0 || totalUsers === 0) return [];
 
@@ -493,12 +570,46 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
 
     return colaboradoresSelecionados.map((u, index) => {
       const quantidade = base + (index < resto ? 1 : 0);
-      const grupos = gruposDistribuicao.slice(cursor, cursor + quantidade);
+      const grupos = gruposDistribuicaoOrdenados.slice(cursor, cursor + quantidade);
       const itemIds = grupos.flatMap((grupo) => grupo.items.map((item) => item.id));
+      const clientNames = grupos.map((grupo) => grupo.clientName).filter(Boolean);
       cursor += quantidade;
-      return { user: u, itemIds };
+      return { user: u, itemIds, clientNames };
     }).filter((p) => p.itemIds.length > 0);
-  }, [colaboradoresSelecionados, gruposDistribuicao]);
+  }, [colaboradoresSelecionados, gruposDistribuicaoOrdenados]);
+
+  const addSelectedCollaborator = () => {
+    if (!availableFocusedUserId) return;
+    setShowDistributionPreview(false);
+    setSelectedUserIds((prev) => (prev.includes(availableFocusedUserId) ? prev : [...prev, availableFocusedUserId]));
+    setSelectedFocusedUserId(availableFocusedUserId);
+    const remaining = colaboradoresDisponiveis.filter((u) => u.userId !== availableFocusedUserId);
+    setAvailableFocusedUserId(remaining[0]?.userId ?? null);
+  };
+
+  const removeSelectedCollaborator = () => {
+    if (!selectedFocusedUserId) return;
+    setShowDistributionPreview(false);
+    setSelectedUserIds((prev) => prev.filter((id) => id !== selectedFocusedUserId));
+    setAvailableFocusedUserId(selectedFocusedUserId);
+    const remaining = colaboradoresSelecionados.filter((u) => u.userId !== selectedFocusedUserId);
+    setSelectedFocusedUserId(remaining[0]?.userId ?? null);
+  };
+
+  const moveSelectedCollaborator = (direction: "up" | "down") => {
+    if (!selectedFocusedUserId) return;
+    setShowDistributionPreview(false);
+    setSelectedUserIds((prev) => {
+      const currentIndex = prev.indexOf(selectedFocusedUserId);
+      if (currentIndex < 0) return prev;
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(currentIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  };
 
   const assignMutation = useMutation({
     mutationFn: async () => {
@@ -508,11 +619,12 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
           itemIds: grupo.itemIds,
         });
       }
+      await api.patch(`/charges/${batch.id}/status`, { status: "concluido" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["charge-batches"] });
       queryClient.invalidateQueries({ queryKey: ["batch-items", batch.id] });
-      toast.success("Itens distribuidos com sucesso!");
+      toast.success("Itens distribuídos com sucesso!");
       onClose();
     },
     onError: (err) => toast.error(err instanceof ApiError ? err.message : "Erro ao distribuir itens."),
@@ -526,6 +638,14 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
         </SheetHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+        {(startMutation.isPending || syncBeforeStep2Mutation.isPending) && (
+          <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <p className="font-medium">Aguarde, estamos consultando novamente o banco de dados.</p>
+            <p className="text-blue-800">
+              Estamos sincronizando os títulos e validando processos jurídicos atualizados antes de liberar a próxima etapa.
+            </p>
+          </div>
+        )}
         {/* Step indicator */}
         <div className="flex items-center gap-1 mb-6 overflow-x-auto">
           {WIZARD_STEPS.map((label, i) => {
@@ -555,7 +675,7 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
             </h3>
             <div className="rounded-md border p-4 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Codigo</span>
+                <span className="text-muted-foreground">Código</span>
                 <span className="font-medium">{batch.batch_code}</span>
               </div>
               <div className="flex justify-between">
@@ -566,10 +686,10 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                 <span className="text-muted-foreground">Criado em</span>
                 <span>{new Date(batch.created_at).toLocaleDateString("pt-BR")}</span>
               </div>
-              {!itemsLoading && legalItems.length > 0 && (
+              {!itemsLoading && legalItemsFromCurrentCheck.length > 0 && (
                 <div className="flex justify-between text-amber-600">
-                  <span>Processos juridicos</span>
-                  <span className="font-medium">{legalItems.length}</span>
+                  <span>Processos jurídicos</span>
+                  <span className="font-medium">{titulosJuridicos}</span>
                 </div>
               )}
               {!itemsLoading && internalItems.length > 0 && (
@@ -583,14 +703,14 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
             {/* Items list */}
             <div className="space-y-2">
               <p className="text-sm font-medium">
-                Titulos do processo {itemsLoading ? "" : `(${items.length})`}
+                Títulos do processo {itemsLoading ? "" : `(${items.length})`}
               </p>
               {itemsLoading ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
                 </div>
               ) : items.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum titulo encontrado.</p>
+                <p className="text-sm text-muted-foreground">Nenhum título encontrado.</p>
               ) : (
                 <>
                   <ClientGroupedItems items={items} />
@@ -644,11 +764,11 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
             </h3>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">Titulos do processo</p>
+                <p className="text-xs text-muted-foreground">Títulos do processo</p>
                 <p className="text-2xl font-semibold">{totalTitulos}</p>
               </div>
               <div className="rounded-md border border-red-200 bg-red-50 p-3">
-                <p className="text-xs text-muted-foreground">Em processo juridico</p>
+                <p className="text-xs text-muted-foreground">Em processo jurídico</p>
                 <p className="text-2xl font-semibold text-red-700">{titulosJuridicos}</p>
               </div>
               <div className="rounded-md border p-3">
@@ -662,18 +782,15 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                 {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
               </div>
             ) : (() => {
-              const blockedCount = items.filter(
-                (i) => i.document && bqProcessoDocsSet.has(normalizeDoc(i.document)),
-              ).length;
               return (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
-                      Todos os {items.length} itens do processo. Linhas em vermelho ja possuem processo juridico ativo no ERP e <strong>nao serao cobrados</strong>.
+                      Todos os {items.length} itens do processo. As linhas marcadas em vermelho foram bloqueadas pela consulta atual ao BigQuery de processos jurídicos e <strong>não serão cobradas</strong>.
                     </p>
-                    {blockedCount > 0 && (
+                    {titulosJuridicos > 0 && (
                       <Badge variant="destructive" className="shrink-0 ml-2">
-                        {blockedCount} bloqueado{blockedCount !== 1 ? "s" : ""}
+                        {titulosJuridicos} título{titulosJuridicos !== 1 ? "s" : ""} bloqueado{titulosJuridicos !== 1 ? "s" : ""}
                       </Badge>
                     )}
                   </div>
@@ -728,13 +845,13 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                   } catch (err) {
                     toast.warning(err instanceof ApiError
                       ? `${err.message} Seguindo para a proxima etapa.`
-                      : "Erro ao atualizar status de processos juridicos. Seguindo para a proxima etapa.");
+                      : "Erro ao atualizar status de processos jurídicos. Seguindo para a próxima etapa.");
                   } finally {
                     setStep(3);
                   }
                 }}
               >
-                Proximo <ChevronRight className="ml-1 h-4 w-4" />
+                Próximo <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -748,7 +865,7 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
             </h3>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">Titulos do processo</p>
+                <p className="text-xs text-muted-foreground">Títulos do processo</p>
                 <p className="text-2xl font-semibold">{totalTitulos}</p>
               </div>
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
@@ -756,7 +873,7 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                 <p className="text-2xl font-semibold text-amber-700">{titulosTratativa}</p>
               </div>
               <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">Titulos elegiveis apos filtros</p>
+                <p className="text-xs text-muted-foreground">Títulos elegíveis após filtros</p>
                 <p className="text-2xl font-semibold">{gruposDistribuicao.length}</p>
               </div>
             </div>
@@ -795,51 +912,130 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                   }
                 }}
               >
-                Proximo <ChevronRight className="ml-1 h-4 w-4" />
+                Próximo <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 4 — Distribuicao */}
+        {/* Step 4 — Distribuição */}
         {step === 4 && (
           <div className="space-y-4">
             <h3 className="font-semibold flex items-center gap-2">
-              <Users className="h-4 w-4" />Distribuicao
+              <Users className="h-4 w-4" />Distribuição
             </h3>
             <p className="text-sm text-muted-foreground">
-              Selecione os colaboradores que participarao da distribuicao dos {gruposDistribuicao.length} titulos elegiveis.
+              Selecione os colaboradores que participarão da distribuição dos {gruposDistribuicao.length} títulos elegíveis.
             </p>
             <div className="space-y-2">
-              <p className="text-sm font-medium">Titulos elegiveis para distribuicao</p>
+              <p className="text-sm font-medium">Títulos elegíveis para distribuição</p>
               <ClientGroupedItems items={elegiveisDistribuicao} />
             </div>
             <div className="space-y-2 rounded-md border p-3 text-sm">
               <Label>Colaboradores</Label>
               {cobradoresOrdenados.length === 0 ? (
-                <p className="text-muted-foreground">Nenhum colaborador disponivel para distribuicao.</p>
+                <p className="text-muted-foreground">Nenhum colaborador disponível para distribuição.</p>
               ) : (
-                <div className="space-y-2">
-                  {cobradoresOrdenados.map((u) => {
-                    const checked = selectedUserIds.includes(u.userId);
-                    return (
-                      <label key={u.userId} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            setShowDistributionPreview(false);
-                            setSelectedUserIds((prev) =>
-                              e.target.checked
-                                ? [...prev, u.userId]
-                                : prev.filter((id) => id !== u.userId),
-                            );
-                          }}
-                        />
-                        <span>{u.fullName}</span>
-                      </label>
-                    );
-                  })}
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Disponíveis</p>
+                    <div className="rounded-md border">
+                      {colaboradoresDisponiveis.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-muted-foreground">Todos os colaboradores ja foram selecionados.</p>
+                      ) : (
+                        colaboradoresDisponiveis.map((u) => {
+                          const active = availableFocusedUserId === u.userId;
+                          return (
+                            <button
+                              key={u.userId}
+                              type="button"
+                              className={cn(
+                                "flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/40",
+                                active && "bg-muted",
+                              )}
+                              onClick={() => setAvailableFocusedUserId(u.userId)}
+                            >
+                              <span>{u.fullName}</span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={addSelectedCollaborator}
+                      disabled={!availableFocusedUserId}
+                      title="Adicionar colaborador"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={removeSelectedCollaborator}
+                      disabled={!selectedFocusedUserId}
+                      title="Remover colaborador"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-muted-foreground">Selecionados na ordem da distribuicao</p>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => moveSelectedCollaborator("up")}
+                          disabled={!selectedFocusedUserId || selectedUserIds.indexOf(selectedFocusedUserId) <= 0}
+                          title="Mover para cima"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => moveSelectedCollaborator("down")}
+                          disabled={!selectedFocusedUserId || selectedUserIds.indexOf(selectedFocusedUserId) === -1 || selectedUserIds.indexOf(selectedFocusedUserId) >= selectedUserIds.length - 1}
+                          title="Mover para baixo"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="rounded-md border">
+                      {colaboradoresSelecionados.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-muted-foreground">Adicione ao menos um colaborador para gerar a distribuicao.</p>
+                      ) : (
+                        colaboradoresSelecionados.map((u, index) => {
+                          const active = selectedFocusedUserId === u.userId;
+                          return (
+                            <button
+                              key={u.userId}
+                              type="button"
+                              className={cn(
+                                "flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/40",
+                                active && "bg-muted",
+                              )}
+                              onClick={() => setSelectedFocusedUserId(u.userId)}
+                            >
+                              <span>{u.fullName}</span>
+                              <Badge variant="outline">{index + 1}</Badge>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -850,14 +1046,30 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
                   variant="outline"
                   onClick={() => setShowDistributionPreview((v) => !v)}
                 >
-                  {showDistributionPreview ? "Ocultar preview" : "Preview da divisao"}
+                  {showDistributionPreview ? "Ocultar preview" : "Preview da divisão"}
                 </Button>
                 {showDistributionPreview && (
-                  <div className="space-y-1 rounded-md border p-3 text-sm">
+                  <div className="space-y-3 rounded-md border p-3 text-sm">
                     {planoDistribuicao.map((grupo) => (
-                      <div key={grupo.user.userId} className="flex items-center justify-between">
-                        <span>{grupo.user.fullName}</span>
-                        <Badge variant="secondary">{grupo.itemIds.length} titulo(s)</Badge>
+                      <div key={grupo.user.userId} className="rounded-md border bg-muted/20 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">{grupo.user.fullName}</span>
+                          <Badge variant="secondary">{grupo.itemIds.length} título(s)</Badge>
+                        </div>
+                        <div className="mt-3 space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">Clientes distribuídos</p>
+                          {grupo.clientNames.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {grupo.clientNames.map((clientName) => (
+                                <Badge key={`${grupo.user.userId}-${clientName}`} variant="outline" className="font-normal">
+                                  {clientName}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">Nenhum cliente vinculado.</p>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -885,6 +1097,164 @@ function IniciarWizard({ batch, onClose }: { batch: ChargeBatch; onClose: () => 
             onClose={() => setFeedbackItem(null)}
           />
         )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function ProcessOverviewSheet({ batch, onClose }: { batch: ChargeBatch; onClose: () => void }) {
+  const { data: items = [], isLoading: itemsLoading } = useQuery<ChargeItem[]>({
+    queryKey: ["batch-items", batch.id],
+    queryFn: () => api.get<ChargeItem[]>(`/charges/items?batchId=${batch.id}`),
+    staleTime: 1000 * 30,
+  });
+
+  const { data: users = [] } = useQuery<AppUser[]>({
+    queryKey: ["users"],
+    queryFn: () => api.get<AppUser[]>("/users"),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const userNameById = useMemo(
+    () => {
+      const map = new Map<string, string>();
+      for (const user of users) {
+        map.set(user.userId, user.fullName);
+        map.set(user.id, user.fullName);
+      }
+      return map;
+    },
+    [users],
+  );
+
+  const distributedItems = useMemo(
+    () => items.filter((item) => Boolean(item.assigned_to_user_id)),
+    [items],
+  );
+  const totalItems = distributedItems.length;
+  const juridicos = items.filter((item) => item.legal_process_flag).length;
+  const tratativas = items.filter((item) => item.internal_handling_flag).length;
+  const assignedGroups = Array.from(
+    distributedItems.reduce((map, item) => {
+      const assignedId = item.assigned_to_user_id;
+      if (!assignedId) {
+        return map;
+      }
+      const current = map.get(assignedId) ?? 0;
+      map.set(assignedId, current + 1);
+      return map;
+    }, new Map<string, number>()),
+  ).map(([userId, count]) => ({
+    userId,
+    count,
+    fullName: userNameById.get(userId) ?? "Colaborador não encontrado",
+  }));
+
+  const statusGroups = Array.from(
+    distributedItems.reduce((map, item) => {
+      const key = item.status ?? "pendente";
+      map.set(key, (map.get(key) ?? 0) + 1);
+      return map;
+    }, new Map<string, number>()),
+  );
+
+  const columns: Column<ChargeItem>[] = [
+    { key: "client", header: "Cliente", accessor: (row) => row.client_name ?? "—" },
+    { key: "document", header: "Documento", accessor: (row) => row.document ?? "—" },
+    { key: "enterprise", header: "Empreendimento", accessor: (row) => row.enterprise_name ?? "—" },
+    {
+      key: "assigned",
+      header: "Colaborador responsavel",
+      accessor: (row) => (row.assigned_to_user_id ? (userNameById.get(row.assigned_to_user_id) ?? "Colaborador não encontrado") : "Não atribuído"),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <Badge variant="outline">{ITEM_STATUS_LABEL[row.status] ?? row.status}</Badge>,
+    },
+    {
+      key: "flags",
+      header: "Flags",
+      render: (row) => (
+        <div className="flex gap-1">
+          {row.legal_process_flag && <Badge variant="outline" className="text-xs">JUR</Badge>}
+          {row.internal_handling_flag && <Badge variant="destructive" className="text-xs">TI</Badge>}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="w-[90vw] sm:max-w-6xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Processo {batch.batch_code}</SheetTitle>
+        </SheetHeader>
+        <div className="mt-6 space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Itens distribuídos</p>
+              <p className="text-2xl font-semibold">{totalItems}</p>
+            </div>
+            <div className="rounded-md border border-red-200 bg-red-50 p-3">
+              <p className="text-xs text-muted-foreground">Processos jurídicos</p>
+              <p className="text-2xl font-semibold text-red-700">{juridicos}</p>
+            </div>
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs text-muted-foreground">Tratativas internas</p>
+              <p className="text-2xl font-semibold text-amber-700">{tratativas}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Colaboradores com itens</p>
+              <p className="text-2xl font-semibold">{assignedGroups.length}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-md border p-4 space-y-3">
+              <p className="text-sm font-medium">Distribuição por colaborador</p>
+              {assignedGroups.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum item distribuído.</p>
+              ) : (
+                <div className="space-y-2">
+                  {assignedGroups.map((group) => (
+                    <div key={group.userId} className="flex items-center justify-between">
+                      <span>{group.fullName}</span>
+                      <Badge variant="secondary">{group.count} item(ns)</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-md border p-4 space-y-3">
+              <p className="text-sm font-medium">Situação dos itens</p>
+              {statusGroups.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum item distribuído.</p>
+              ) : (
+                <div className="space-y-2">
+                  {statusGroups.map(([status, count]) => (
+                    <div key={status} className="flex items-center justify-between">
+                      <span>{ITEM_STATUS_LABEL[status] ?? status}</span>
+                      <Badge variant="outline">{count}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Itens distribuídos do processo</p>
+            {itemsLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+              </div>
+            ) : (
+              <DataTable data={distributedItems} columns={columns} />
+            )}
+          </div>
+        </div>
       </SheetContent>
     </Sheet>
   );
@@ -1006,7 +1376,7 @@ function ItemFeedbackDialog({
                 <SelectItem value="sem_retorno">Sem retorno</SelectItem>
                 <SelectItem value="em_atendimento">Em atendimento</SelectItem>
                 <SelectItem value="ciente_sem_retorno">Ciente s/ retorno</SelectItem>
-                <SelectItem value="em_negociacao">Em negociacao</SelectItem>
+                <SelectItem value="em_negociacao">Em negociação</SelectItem>
                 <SelectItem value="acordo">Acordo</SelectItem>
                 <SelectItem value="pago">Pago</SelectItem>
               </SelectContent>
@@ -1017,7 +1387,7 @@ function ItemFeedbackDialog({
             <Input placeholder="Ex: ligacao, e-mail, visita" value={categoryKey} onChange={(e) => setCategoryKey(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Observacoes</Label>
+            <Label>Observações</Label>
             <Textarea rows={3} placeholder="Detalhes do contato..." value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>

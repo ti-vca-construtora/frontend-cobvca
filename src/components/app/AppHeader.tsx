@@ -27,7 +27,7 @@ export function AppHeader() {
 
   if (!usuario) return null;
 
-  const nomeSeguro = (usuario.nome || usuario.email || "Usuario").trim();
+  const nomeSeguro = (usuario.nome || usuario.email || "Usuário").trim();
   const iniciais = nomeSeguro.split(" ").map((s) => s[0]).slice(0, 2).join("");
 
   const handleLogout = () => {

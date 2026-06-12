@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutRelatoriosRouteImport } from './routes/_layout/relatorios'
 import { Route as LayoutNegativacaoRouteImport } from './routes/_layout/negativacao'
 import { Route as LayoutCronogramaRouteImport } from './routes/_layout/cronograma'
 import { Route as LayoutConsultasRouteImport } from './routes/_layout/consultas'
@@ -39,6 +40,11 @@ const LayoutRoute = LayoutRouteImport.update({
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutRelatoriosRoute = LayoutRelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutNegativacaoRoute = LayoutNegativacaoRouteImport.update({
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/consultas': typeof LayoutConsultasRoute
   '/cronograma': typeof LayoutCronogramaRoute
   '/negativacao': typeof LayoutNegativacaoRouteWithChildren
+  '/relatorios': typeof LayoutRelatoriosRoute
   '/admin/cv-sienge': typeof LayoutAdminCvSiengeRoute
   '/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
   '/admin/tratativa-interna': typeof LayoutAdminTratativaInternaRoute
@@ -143,6 +150,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof LayoutConfiguracoesRoute
   '/consultas': typeof LayoutConsultasRoute
   '/cronograma': typeof LayoutCronogramaRoute
+  '/relatorios': typeof LayoutRelatoriosRoute
   '/': typeof LayoutIndexRoute
   '/admin/cv-sienge': typeof LayoutAdminCvSiengeRoute
   '/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
@@ -163,6 +171,7 @@ export interface FileRoutesById {
   '/_layout/consultas': typeof LayoutConsultasRoute
   '/_layout/cronograma': typeof LayoutCronogramaRoute
   '/_layout/negativacao': typeof LayoutNegativacaoRouteWithChildren
+  '/_layout/relatorios': typeof LayoutRelatoriosRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/admin/cv-sienge': typeof LayoutAdminCvSiengeRoute
   '/_layout/admin/empreendimento': typeof LayoutAdminEmpreendimentoRoute
@@ -184,6 +193,7 @@ export interface FileRouteTypes {
     | '/consultas'
     | '/cronograma'
     | '/negativacao'
+    | '/relatorios'
     | '/admin/cv-sienge'
     | '/admin/empreendimento'
     | '/admin/tratativa-interna'
@@ -200,6 +210,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/consultas'
     | '/cronograma'
+    | '/relatorios'
     | '/'
     | '/admin/cv-sienge'
     | '/admin/empreendimento'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/_layout/consultas'
     | '/_layout/cronograma'
     | '/_layout/negativacao'
+    | '/_layout/relatorios'
     | '/_layout/'
     | '/_layout/admin/cv-sienge'
     | '/_layout/admin/empreendimento'
@@ -256,6 +268,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof LayoutIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/relatorios': {
+      id: '/_layout/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof LayoutRelatoriosRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/negativacao': {
@@ -412,6 +431,7 @@ interface LayoutRouteChildren {
   LayoutConsultasRoute: typeof LayoutConsultasRoute
   LayoutCronogramaRoute: typeof LayoutCronogramaRoute
   LayoutNegativacaoRoute: typeof LayoutNegativacaoRouteWithChildren
+  LayoutRelatoriosRoute: typeof LayoutRelatoriosRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
 
@@ -422,6 +442,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutConsultasRoute: LayoutConsultasRoute,
   LayoutCronogramaRoute: LayoutCronogramaRoute,
   LayoutNegativacaoRoute: LayoutNegativacaoRouteWithChildren,
+  LayoutRelatoriosRoute: LayoutRelatoriosRoute,
   LayoutIndexRoute: LayoutIndexRoute,
 }
 

@@ -8,14 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Briefcase, Users, GitCompare, Upload, Gavel } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Briefcase, Users, GitCompare, Upload, Gavel, ChevronDown } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -41,6 +42,12 @@ interface NegativationItem {
   status: "pendente" | "pronto_exportacao" | "exportado" | "retirada_pendente" | "retirado";
   internal_handling_flag: boolean;
   legal_process_flag: boolean;
+}
+
+interface Enterprise {
+  id: string;
+  cost_center_name: string;
+  status: string;
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
@@ -78,7 +85,7 @@ function NegativacaoPage() {
   }
 
   return (
-    <ProtectedRoute perfis={["administrador", "supervisor", "negativador"]}>
+    <ProtectedRoute perfis={["administrador", "negativador"]}>
       <PageHeader
         titulo="Negativação"
         descricao="Criação e acompanhamento de processos de negativação"
@@ -115,9 +122,9 @@ function NegativacaoPage() {
           </div>
         }
       />
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1"><CriarBatchForm /></div>
-        <div className="lg:col-span-2"><ListaBatches /></div>
+      <div className="space-y-6">
+        <CriarBatchForm />
+        <ListaBatches />
       </div>
     </ProtectedRoute>
   );
@@ -127,29 +134,19 @@ function NegativacaoPage() {
 
 function CriarBatchForm() {
   const queryClient = useQueryClient();
-  const [source, setSource] = useState<string>("");
-  const [option, setOption] = useState<string>("");
-  const [client, setClient] = useState("");
-  const [enterprise, setEnterprise] = useState("");
-  const [limit, setLimit] = useState("");
-  const [aplicarS1, setAplicarS1] = useState(false);
-  const [aplicarCronograma, setAplicarCronograma] = useState(false);
+  const [selectedEnterpriseIds, setSelectedEnterpriseIds] = useState<string[]>([]);
 
   const mutation = useMutation({
     mutationFn: () =>
-      api.post("/negativations", {
-        source,
-        ...(option ? { option } : {}),
-        ...(client.trim() ? { client: client.trim() } : {}),
-        ...(enterprise.trim() ? { enterprise: enterprise.trim() } : {}),
-        ...(limit ? { limit: Number(limit) } : {}),
-        ...(aplicarS1 ? { aplicar_filtro_s1: true } : {}),
-        ...(aplicarCronograma ? { aplicar_cronograma: true } : {}),
+      api.post<{ batch: NegativationBatch; insertedItems: number }>("/negativations", {
+        source: "contas-receber",
+        option: "negativation",
+        ...(selectedEnterpriseIds.length > 0 ? { enterpriseIds: selectedEnterpriseIds } : {}),
       }),
     onSuccess: (res: { batch: NegativationBatch; insertedItems: number }) => {
       queryClient.invalidateQueries({ queryKey: ["negativation-batches"] });
       toast.success(`Batch ${res.batch.batch_code} criado — ${res.insertedItems} itens`);
-      setSource(""); setOption(""); setClient(""); setEnterprise(""); setLimit(""); setAplicarS1(false); setAplicarCronograma(false);
+      setSelectedEnterpriseIds([]);
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Erro ao criar processo.");
@@ -161,64 +158,40 @@ function CriarBatchForm() {
       <CardContent className="p-6 space-y-4">
         <h2 className="font-semibold">Criar processo</h2>
 
-        <div className="space-y-1">
-          <Label>Fonte *</Label>
-          <Select value={source} onValueChange={setSource}>
-            <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="contas-receber">Contas a Receber</SelectItem>
-              <SelectItem value="contas-recebidas">Contas Recebidas</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
+        <div className="hidden">
           <Label>Opção</Label>
-          <Select value={option} onValueChange={setOption}>
-            <SelectTrigger><SelectValue placeholder="Padrão" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="negativation">Negativação</SelectItem>
-              <SelectItem value="charge">Cobrança</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="hidden">
+            {null}
+          </div>
         </div>
 
-        <div className="space-y-1">
+        <div className="hidden">
           <Label>Filtrar cliente</Label>
-          <Input placeholder="Nome ou CPF/CNPJ" value={client} onChange={(e) => setClient(e.target.value)} />
+          <Input placeholder="Nome ou CPF/CNPJ" value="" onChange={() => undefined} />
         </div>
 
-        <div className="space-y-1">
-          <Label>Filtrar empreendimento</Label>
-          <Input placeholder="Nome do empreendimento" value={enterprise} onChange={(e) => setEnterprise(e.target.value)} />
+        <div className="max-w-md space-y-1">
+          <EnterprisesMultiSelect selected={selectedEnterpriseIds} onChange={setSelectedEnterpriseIds} />
         </div>
 
-        <div className="space-y-1">
+        <div className="hidden">
           <Label>Limite de registros</Label>
-          <Input type="number" min={1} max={1000} placeholder="Ex: 200" value={limit} onChange={(e) => setLimit(e.target.value)} />
+          <Input type="number" min={1} max={1000} placeholder="Ex: 200" value="" onChange={() => undefined} />
         </div>
 
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="s1-neg"
-            checked={aplicarS1}
-            onCheckedChange={(v) => setAplicarS1(!!v)}
-          />
+        <div className="hidden">
+          {null}
           <Label htmlFor="s1-neg" className="cursor-pointer">Aplicar filtro S1</Label>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="cronograma-neg"
-            checked={aplicarCronograma}
-            onCheckedChange={(v) => setAplicarCronograma(!!v)}
-          />
+        <div className="hidden">
+          {null}
           <Label htmlFor="cronograma-neg" className="cursor-pointer">Aplicar cronograma</Label>
         </div>
 
         <Button
-          className="w-full"
-          disabled={!source || mutation.isPending}
+          className="w-full sm:w-auto"
+          disabled={mutation.isPending}
           onClick={() => mutation.mutate()}
         >
           {mutation.isPending ? "Criando…" : "Criar processo"}
@@ -229,6 +202,66 @@ function CriarBatchForm() {
 }
 
 // ─── Lista de batches ─────────────────────────────────────────────────────────
+
+function EnterprisesMultiSelect({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const { data: list = [] } = useQuery<Enterprise[]>({
+    queryKey: ["enterprises"],
+    queryFn: () => api.get<Enterprise[]>("/enterprises"),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const active = list.filter((enterprise) => enterprise.status === "ativo");
+  const toggle = (id: string) =>
+    onChange(selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
+
+  const label =
+    selected.length === 0
+      ? "Todos os empreendimentos"
+      : selected.length === 1
+        ? (active.find((enterprise) => enterprise.id === selected[0])?.cost_center_name ?? "1 selecionado")
+        : `${selected.length} selecionados`;
+
+  return (
+    <div className="space-y-1">
+      <Label>Filtrar empreendimento</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="w-full justify-between font-normal">
+            <span className="truncate">{label}</span>
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-2" align="start">
+          <ScrollArea className="h-56">
+            <div className="space-y-1 pr-2">
+              {active.map((enterprise) => (
+                <div
+                  key={enterprise.id}
+                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted"
+                  onClick={() => toggle(enterprise.id)}
+                >
+                  <Checkbox checked={selected.includes(enterprise.id)} onCheckedChange={() => toggle(enterprise.id)} />
+                  <span className="text-sm">{enterprise.cost_center_name}</span>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          {selected.length > 0 && (
+            <Button variant="ghost" size="sm" className="mt-1 w-full text-xs" onClick={() => onChange([])}>
+              Limpar seleção
+            </Button>
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 
 const STATUS_BADGE: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   pendente: "secondary",
@@ -250,7 +283,7 @@ function ListaBatches() {
     { key: "code", header: "Código", accessor: (r) => r.batch_code },
     {
       key: "source", header: "Fonte",
-      render: (r) => r.source_view.includes("recebidas") ? "Contas Recebidas" : "Contas a Receber",
+      render: (r) => (r.source_view ?? "contas-receber").includes("recebidas") ? "Contas Recebidas" : "Contas a Receber",
     },
     {
       key: "status", header: "Status",

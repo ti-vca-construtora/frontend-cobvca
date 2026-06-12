@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Search, Ban, HandCoins, FolderKanban,
-  Settings, FileText, ArrowLeftRight, Building2, Cog, Undo2, CalendarDays, ListTodo,
+  Settings, FileText, ArrowLeftRight, Building2, Cog, Undo2, CalendarDays, ListTodo, BarChart3,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -23,20 +23,21 @@ const grupos: { label: string; items: Item[] }[] = [
     items: [
       { title: "Home", url: "/", icon: LayoutDashboard },
       { title: "Consultas", url: "/consultas", icon: Search },
+      { title: "Relatórios", url: "/relatorios", icon: BarChart3, perfis: ["administrador", "supervisor", "cobrador"] },
     ],
   },
   {
     label: "Negativação",
     items: [
-      { title: "Negativação", url: "/negativacao", icon: Ban, perfis: ["administrador", "supervisor", "negativador"] },
-      { title: "Retiradas", url: "/negativacao/retiradas", icon: Undo2, perfis: ["administrador", "supervisor", "negativador"] },
+      { title: "Negativação", url: "/negativacao", icon: Ban, perfis: ["administrador", "negativador"] },
+      { title: "Retiradas", url: "/negativacao/retiradas", icon: Undo2, perfis: ["administrador", "negativador"] },
     ],
   },
   {
     label: "Cobrança",
     items: [
       { title: "Meus Processos", url: "/cobranca/meus-processos", icon: FolderKanban, perfis: ["administrador", "supervisor", "cobrador"] },
-      { title: "Minhas Distribuicoes", url: "/cobranca/minhas-distribuicoes", icon: ListTodo, perfis: ["administrador", "supervisor", "cobrador"] },
+      { title: "Minhas Distribuições", url: "/cobranca/minhas-distribuicoes", icon: ListTodo, perfis: ["administrador", "supervisor", "cobrador"] },
     ],
   },
   {
@@ -51,7 +52,7 @@ const grupos: { label: string; items: Item[] }[] = [
     label: "Sistema",
     items: [
       { title: "Cronograma", url: "/cronograma", icon: CalendarDays, perfis: ["administrador"] },
-      { title: "Configurações", url: "/configuracoes", icon: Cog, perfis: ["administrador"] },
+      { title: "Configurações", url: "/configuracoes", icon: Cog, perfis: ["administrador", "supervisor"] },
     ],
   },
 ];

@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app/PageHeader";
 import { ProtectedRoute } from "@/components/app/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/app/DataTable";
+import { ClientGroupedItems, groupTitleItems } from "@/components/app/ClientGroupedItems";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Users } from "lucide-react";
 
 export const Route = createFileRoute("/_layout/cobranca/novo-processo")({ component: NovoProcessoPage });
 
@@ -68,6 +70,7 @@ interface BqRow {
   }>;
   [key: string]: unknown;
 }
+type PreviewBqRow = BqRow & { id: string };
 type BqResponse = { data?: BqRow[] };
 type PaginatedBqResponse<T> = { data?: T[]; totalPages?: number };
 type CreatedBatch = { id: string; batch_code: string };
@@ -175,9 +178,6 @@ function NovoProcessoPage() {
 
 function CriarBatchForm() {
   const [selectedEnterpriseIds, setSelectedEnterpriseIds] = useState<string[]>([]);
-  const [limit, setLimit] = useState("200");
-  const [aplicarS1, setAplicarS1] = useState(false);
-  const [aplicarCronograma, setAplicarCronograma] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
@@ -186,18 +186,6 @@ function CriarBatchForm() {
         <CardHeader><CardTitle className="text-base">Criar processo</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <EnterprisesMultiSelect selected={selectedEnterpriseIds} onChange={setSelectedEnterpriseIds} />
-          <div className="space-y-1">
-            <Label>Limite de itens</Label>
-            <Input type="number" min={1} max={1000} value={limit} onChange={(e) => setLimit(e.target.value)} />
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="s1-charge" checked={aplicarS1} onCheckedChange={(v) => setAplicarS1(!!v)} />
-            <Label htmlFor="s1-charge" className="cursor-pointer">Aplicar filtro S1</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="cronograma-charge" checked={aplicarCronograma} onCheckedChange={(v) => setAplicarCronograma(!!v)} />
-            <Label htmlFor="cronograma-charge" className="cursor-pointer">Aplicar cronograma</Label>
-          </div>
           <Button className="w-full" variant="outline" onClick={() => setPreviewOpen(true)}>
             Pré-visualizar dados
           </Button>
@@ -207,9 +195,6 @@ function CriarBatchForm() {
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         enterpriseIds={selectedEnterpriseIds}
-        limit={limit}
-        aplicarS1={aplicarS1}
-        aplicarCronograma={aplicarCronograma}
       />
     </>
   );
@@ -224,6 +209,7 @@ function EnterprisesMultiSelect({
   selected: string[];
   onChange: (v: string[]) => void;
 }) {
+  const [search, setSearch] = useState("");
   const { data: list = [] } = useQuery<Enterprise[]>({
     queryKey: ["enterprises"],
     queryFn: () => api.get<Enterprise[]>("/enterprises"),
@@ -231,6 +217,16 @@ function EnterprisesMultiSelect({
   });
 
   const active = list.filter((e) => e.status === "ativo");
+  const normalizeSearch = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  const searchTerm = normalizeSearch(search);
+  const filteredActive = searchTerm
+    ? active.filter((e) => normalizeSearch(e.cost_center_name).includes(searchTerm))
+    : active;
 
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
@@ -253,9 +249,17 @@ function EnterprisesMultiSelect({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-72 p-2" align="start">
+          <Input
+            className="mb-2 h-9"
+            placeholder="Buscar empreendimento..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
           <ScrollArea className="h-56">
             <div className="space-y-1 pr-2">
-              {active.map((e) => (
+              {filteredActive.length === 0 ? (
+                <p className="px-2 py-6 text-center text-sm text-muted-foreground">Nenhum empreendimento encontrado.</p>
+              ) : filteredActive.map((e) => (
                 <div
                   key={e.id}
                   className="flex items-center gap-2 rounded px-2 py-1 hover:bg-muted cursor-pointer"
@@ -287,36 +291,52 @@ function PreviewSheet({
   open,
   onClose,
   enterpriseIds,
-  limit,
-  aplicarS1,
-  aplicarCronograma,
 }: {
   open: boolean;
   onClose: () => void;
   enterpriseIds: string[];
-  limit: string;
-  aplicarS1: boolean;
-  aplicarCronograma: boolean;
 }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [createdBatch, setCreatedBatch] = useState<CreatedBatch | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [availableFocusedUserId, setAvailableFocusedUserId] = useState<string | null>(null);
+  const [selectedFocusedUserId, setSelectedFocusedUserId] = useState<string | null>(null);
+  const [showDistributionPreview, setShowDistributionPreview] = useState(false);
+  const { data: enterprises = [] } = useQuery<Enterprise[]>({
+    queryKey: ["enterprises"],
+    queryFn: () => api.get<Enterprise[]>("/enterprises"),
+    staleTime: 1000 * 60 * 5,
+  });
+  const activeEnterpriseIds = enterprises.filter((enterprise) => enterprise.status === "ativo").map((enterprise) => enterprise.id);
+  const effectiveEnterpriseIds =
+    enterpriseIds.length > 0 && enterpriseIds.length === activeEnterpriseIds.length ? [] : enterpriseIds;
 
   const { data: rows = [], isFetching, isError } = useQuery<BqRow[]>({
-    queryKey: ["bq-preview", limit, enterpriseIds.join("|")],
+    queryKey: ["bq-preview", effectiveEnterpriseIds.join("|")],
     queryFn: async () => {
-      const pageSize = Number(limit || "200");
+      const first = await api.post<PaginatedBqResponse<BqRow>>("/bq/contas-receber", {
+        option: "charge",
+        ...(effectiveEnterpriseIds.length > 0 ? { enterpriseIds: effectiveEnterpriseIds } : {}),
+        page: 1,
+        pageSize: 5000,
+      });
 
-      if (enterpriseIds.length === 0) {
-        const response = await api.post<BqRow[] | BqResponse>("/bq/contas-receber", {
-          option: "charge",
-          limit: pageSize,
-        });
-        return Array.isArray(response) ? response : (response.data ?? []);
-      }
-
-      const perEnterpriseRows = await fetchContasReceberByEnterpriseIds(enterpriseIds, pageSize);
+      const firstRows = first.data ?? [];
+      const totalPages = Math.max(1, Number(first.totalPages ?? 1));
+      const pages = totalPages === 1
+        ? []
+        : await Promise.all(
+            Array.from({ length: totalPages - 1 }, (_, i) =>
+              api.post<PaginatedBqResponse<BqRow>>("/bq/contas-receber", {
+                option: "charge",
+                ...(effectiveEnterpriseIds.length > 0 ? { enterpriseIds: effectiveEnterpriseIds } : {}),
+                page: i + 2,
+                pageSize: 5000,
+              }),
+            ),
+          );
+      const perEnterpriseRows = [firstRows, ...pages.map((page) => page.data ?? [])].flat();
 
       const deduped = new Map<string, BqRow>();
       for (const row of perEnterpriseRows) {
@@ -339,10 +359,7 @@ function PreviewSheet({
       api.post("/charges", {
         source: "contas-receber",
         option: "charge",
-        enterpriseIds,
-        limit: Number(limit),
-        ...(aplicarS1 ? { aplicar_filtro_s1: true } : {}),
-        ...(aplicarCronograma ? { aplicar_cronograma: true } : {}),
+        ...(effectiveEnterpriseIds.length > 0 ? { enterpriseIds: effectiveEnterpriseIds } : {}),
       }),
     onSuccess: (data: unknown) => {
       queryClient.invalidateQueries({ queryKey: ["charge-batches"] });
@@ -420,13 +437,35 @@ function PreviewSheet({
     [cobradores],
   );
 
+  const cobradoresIds = useMemo(() => new Set(cobradoresOrdenados.map((user) => user.userId)), [cobradoresOrdenados]);
+
+  const gruposBatch = useMemo(() => groupTitleItems(batchItems), [batchItems]);
+  const gruposJuridicoBloqueados = useMemo(() => groupTitleItems(juridicoBloqueados).length, [juridicoBloqueados]);
+  const gruposTratativaInterna = useMemo(() => groupTitleItems(tratativaInterna).length, [tratativaInterna]);
+  const gruposDistribuicao = useMemo(() => groupTitleItems(elegiveis), [elegiveis]);
+  const gruposDistribuicaoOrdenados = useMemo(
+    () =>
+      [...gruposDistribuicao].sort((a, b) =>
+        a.clientName.localeCompare(b.clientName, "pt-BR", { sensitivity: "base" }),
+      ),
+    [gruposDistribuicao],
+  );
+
   const colaboradoresSelecionados = useMemo(
-    () => cobradoresOrdenados.filter((u) => selectedUserIds.includes(u.userId)),
+    () =>
+      selectedUserIds
+        .map((userId) => cobradoresOrdenados.find((u) => u.userId === userId))
+        .filter((u): u is AppUser => !!u),
+    [cobradoresOrdenados, selectedUserIds],
+  );
+
+  const colaboradoresDisponiveis = useMemo(
+    () => cobradoresOrdenados.filter((u) => !selectedUserIds.includes(u.userId)),
     [cobradoresOrdenados, selectedUserIds],
   );
 
   const planoDistribuicao = useMemo(() => {
-    const total = elegiveis.length;
+    const total = gruposDistribuicaoOrdenados.length;
     const totalUsers = colaboradoresSelecionados.length;
     if (total === 0 || totalUsers === 0) return [];
 
@@ -436,11 +475,46 @@ function PreviewSheet({
 
     return colaboradoresSelecionados.map((u, index) => {
       const quantidade = base + (index < resto ? 1 : 0);
-      const itemIds = elegiveis.slice(cursor, cursor + quantidade).map((i) => i.id);
+      const grupos = gruposDistribuicaoOrdenados.slice(cursor, cursor + quantidade);
+      const itemIds = grupos.flatMap((grupo) => grupo.items.map((item) => item.id));
+      const clientNames = grupos.map((grupo) => grupo.clientName).filter(Boolean);
       cursor += quantidade;
-      return { user: u, itemIds };
+      return { user: u, itemIds, clientNames };
     }).filter((p) => p.itemIds.length > 0);
-  }, [colaboradoresSelecionados, elegiveis]);
+  }, [colaboradoresSelecionados, gruposDistribuicaoOrdenados]);
+
+  const addSelectedCollaborator = () => {
+    if (!availableFocusedUserId) return;
+    setShowDistributionPreview(false);
+    setSelectedUserIds((prev) => (prev.includes(availableFocusedUserId) ? prev : [...prev, availableFocusedUserId]));
+    setSelectedFocusedUserId(availableFocusedUserId);
+    const remaining = colaboradoresDisponiveis.filter((u) => u.userId !== availableFocusedUserId);
+    setAvailableFocusedUserId(remaining[0]?.userId ?? null);
+  };
+
+  const removeSelectedCollaborator = () => {
+    if (!selectedFocusedUserId) return;
+    setShowDistributionPreview(false);
+    setSelectedUserIds((prev) => prev.filter((id) => id !== selectedFocusedUserId));
+    setAvailableFocusedUserId(selectedFocusedUserId);
+    const remaining = colaboradoresSelecionados.filter((u) => u.userId !== selectedFocusedUserId);
+    setSelectedFocusedUserId(remaining[0]?.userId ?? null);
+  };
+
+  const moveSelectedCollaborator = (direction: "up" | "down") => {
+    if (!selectedFocusedUserId) return;
+    setShowDistributionPreview(false);
+    setSelectedUserIds((prev) => {
+      const currentIndex = prev.indexOf(selectedFocusedUserId);
+      if (currentIndex < 0) return prev;
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(currentIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  };
 
   const assignMutation = useMutation({
     mutationFn: async () => {
@@ -449,6 +523,9 @@ function PreviewSheet({
           assignedToUserId: grupo.user.userId,
           itemIds: grupo.itemIds,
         });
+      }
+      if (createdBatch?.id) {
+        await api.patch(`/charges/${createdBatch.id}/status`, { status: "concluido" });
       }
     },
     onSuccess: () => {
@@ -461,7 +538,26 @@ function PreviewSheet({
     onError: (err) => toast.error(err instanceof ApiError ? err.message : "Erro ao distribuir itens."),
   });
 
-  const columns: Column<BqRow>[] = [
+  useEffect(() => {
+    setSelectedUserIds((prev) => {
+      const next = prev.filter((id) => cobradoresIds.has(id));
+      if (next.length === prev.length && next.every((id, index) => id === prev[index])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [cobradoresIds]);
+
+  const previewRows: PreviewBqRow[] = filtered.map((row, index) => ({
+    ...row,
+    id: String(
+      row.id ??
+      row.verificador ??
+      `${row.documento ?? ""}|${getRowDueDate(row) ?? ""}|${getRowAmount(row) ?? ""}|${row.titulo ?? ""}|${index}`,
+    ),
+  }));
+
+  const columns: Column<PreviewBqRow>[] = [
     { key: "cliente", header: "Cliente", accessor: (r) => String(r.cliente ?? "—") },
     {
       key: "empresa",
@@ -490,7 +586,9 @@ function PreviewSheet({
       <SheetContent className="w-[90vw] sm:max-w-5xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>
-            {step === 1 && (isFetching
+            {step === 1 && (mutation.isPending
+              ? "Criando processo - verificando dados..."
+              : isFetching
               ? "Pré-visualização — Contas a Receber (carregando registros...)"
               : `Pré-visualização — Contas a Receber (${filtered.length} registros)`)}
             {step >= 2 && `Processo ${createdBatch?.batch_code ?? ""}`}
@@ -514,7 +612,17 @@ function PreviewSheet({
           </div>
         )}
         <div className="mt-4">
-          {step === 1 && isFetching ? (
+          {step === 1 && mutation.isPending ? (
+            <div className="space-y-3 rounded-md border p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Criando processo e verificando regras...</p>
+                <p className="text-sm text-muted-foreground">
+                  Estamos salvando os títulos e preparando as validações antes de liberar a distribuição.
+                </p>
+              </div>
+              {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : step === 1 && isFetching ? (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Buscando dados dos empreendimentos selecionados...</p>
               {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
@@ -522,7 +630,7 @@ function PreviewSheet({
           ) : step === 1 && isError ? (
             <p className="text-sm text-destructive">Erro ao carregar dados do BigQuery.</p>
           ) : step === 1 ? (
-            <DataTable data={filtered} columns={columns} />
+            <DataTable data={previewRows} columns={columns} />
           ) : null}
 
           {step === 2 && (isFetchingBatchItems ? (
@@ -538,33 +646,25 @@ function PreviewSheet({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total de títulos</span>
-                  <span className="font-medium">{batchItems.length}</span>
+                  <span className="font-medium">{gruposBatch.length}</span>
                 </div>
-                {juridicoBloqueados.length > 0 && (
+                {gruposJuridicoBloqueados > 0 && (
                   <div className="flex justify-between text-amber-600">
                     <span>Processos jurídicos</span>
-                    <span className="font-medium">{juridicoBloqueados.length}</span>
+                    <span className="font-medium">{gruposJuridicoBloqueados}</span>
                   </div>
                 )}
-                {tratativaInterna.length > 0 && (
+                {gruposTratativaInterna > 0 && (
                   <div className="flex justify-between text-amber-600">
                     <span>Tratativas internas</span>
-                    <span className="font-medium">{tratativaInterna.length}</span>
+                    <span className="font-medium">{gruposTratativaInterna}</span>
                   </div>
                 )}
               </div>
               <div>
                 <p className="text-sm font-medium mb-2">Títulos do processo</p>
                 <div className="max-h-[380px] overflow-y-auto rounded-md border p-2">
-                  <DataTable
-                    data={batchItems}
-                    columns={[
-                      { key: "cliente", header: "Cliente", accessor: (r) => r.client_name ?? "—" },
-                      { key: "doc", header: "Documento", accessor: (r) => r.document ?? "—" },
-                      { key: "emp", header: "Empreendimento", accessor: (r) => r.enterprise_name ?? "—" },
-                      { key: "valor", header: "Valor", render: (r) => r.amount != null ? r.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—" },
-                    ]}
-                  />
+                  <ClientGroupedItems items={batchItems} />
                 </div>
               </div>
             </div>
@@ -638,42 +738,159 @@ function PreviewSheet({
 
           {step === 5 && (
             <div className="space-y-4">
+              <h3 className="font-semibold flex items-center gap-2">
+              <Users className="h-4 w-4" />Distribuição
+              </h3>
               <p className="text-sm text-muted-foreground">
-                Selecione os colaboradores que participarao da distribuicao dos {elegiveis.length} itens elegiveis.
+                Selecione os colaboradores que participarão da distribuição dos {gruposDistribuicao.length} títulos elegíveis.
               </p>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Títulos elegíveis para distribuição</p>
+                <ClientGroupedItems items={elegiveis} />
+              </div>
               <div className="space-y-2 rounded-md border p-3 text-sm">
                 <Label>Colaboradores</Label>
                 {cobradoresOrdenados.length === 0 ? (
-                  <p className="text-muted-foreground">Nenhum colaborador disponivel para distribuicao.</p>
+                  <p className="text-muted-foreground">Nenhum colaborador disponível para distribuição.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {cobradoresOrdenados.map((user) => (
-                      <label key={user.userId} className="flex items-center gap-2">
-                        <Checkbox
-                          checked={selectedUserIds.includes(user.userId)}
-                          onCheckedChange={(checked) =>
-                            setSelectedUserIds((prev) =>
-                              checked ? [...prev, user.userId] : prev.filter((id) => id !== user.userId),
-                            )
-                          }
-                        />
-                        <span>{user.fullName}</span>
-                      </label>
-                    ))}
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Disponíveis</p>
+                      <div className="rounded-md border">
+                        {colaboradoresDisponiveis.length === 0 ? (
+                          <p className="px-3 py-4 text-sm text-muted-foreground">Todos os colaboradores ja foram selecionados.</p>
+                        ) : (
+                          colaboradoresDisponiveis.map((user) => {
+                            const active = availableFocusedUserId === user.userId;
+                            return (
+                              <button
+                                key={user.userId}
+                                type="button"
+                                className={cn(
+                                  "flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/40",
+                                  active && "bg-muted",
+                                )}
+                                onClick={() => setAvailableFocusedUserId(user.userId)}
+                              >
+                                <span>{user.fullName}</span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={addSelectedCollaborator}
+                        disabled={!availableFocusedUserId}
+                        title="Adicionar colaborador"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={removeSelectedCollaborator}
+                        disabled={!selectedFocusedUserId}
+                        title="Remover colaborador"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-muted-foreground">Selecionados na ordem da distribuicao</p>
+                        <div className="flex gap-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => moveSelectedCollaborator("up")}
+                            disabled={!selectedFocusedUserId || selectedUserIds.indexOf(selectedFocusedUserId) <= 0}
+                            title="Mover para cima"
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => moveSelectedCollaborator("down")}
+                            disabled={
+                              !selectedFocusedUserId ||
+                              selectedUserIds.indexOf(selectedFocusedUserId) === -1 ||
+                              selectedUserIds.indexOf(selectedFocusedUserId) >= selectedUserIds.length - 1
+                            }
+                            title="Mover para baixo"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="rounded-md border">
+                        {colaboradoresSelecionados.length === 0 ? (
+                          <p className="px-3 py-4 text-sm text-muted-foreground">Adicione ao menos um colaborador para gerar a distribuicao.</p>
+                        ) : (
+                          colaboradoresSelecionados.map((user, index) => {
+                            const active = selectedFocusedUserId === user.userId;
+                            return (
+                              <button
+                                key={user.userId}
+                                type="button"
+                                className={cn(
+                                  "flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/40",
+                                  active && "bg-muted",
+                                )}
+                                onClick={() => setSelectedFocusedUserId(user.userId)}
+                              >
+                                <span>{user.fullName}</span>
+                                <Badge variant="outline">{index + 1}</Badge>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
               {selectedUserIds.length > 0 && (
-                <div className="space-y-2 rounded-md border p-3 text-sm">
-                  <Label>Previsao de distribuicao</Label>
-                  {planoDistribuicao.length === 0 ? (
-                    <p className="text-muted-foreground">Nenhum item elegivel para distribuir.</p>
-                  ) : (
-                    <div className="space-y-1">
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowDistributionPreview((value) => !value)}
+                  >
+                    {showDistributionPreview ? "Ocultar preview" : "Preview da divisão"}
+                  </Button>
+                  {showDistributionPreview && (
+                    <div className="space-y-3 rounded-md border p-3 text-sm">
                       {planoDistribuicao.map((grupo) => (
-                        <div key={grupo.user.userId} className="flex items-center justify-between">
-                          <span>{grupo.user.fullName}</span>
-                          <Badge variant="secondary">{grupo.itemIds.length} item(ns)</Badge>
+                        <div key={grupo.user.userId} className="rounded-md border bg-muted/20 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-medium">{grupo.user.fullName}</span>
+                            <Badge variant="secondary">{grupo.itemIds.length} título(s)</Badge>
+                          </div>
+                          <div className="mt-3 space-y-1">
+                            <p className="text-xs font-medium text-muted-foreground">Clientes distribuídos</p>
+                            {grupo.clientNames.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {grupo.clientNames.map((clientName) => (
+                                  <Badge key={`${grupo.user.userId}-${clientName}`} variant="outline" className="font-normal">
+                                    {clientName}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">Nenhum cliente vinculado.</p>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -725,7 +942,7 @@ function PreviewSheet({
           )}
           {step === 5 && (
             <Button
-              disabled={assignMutation.isPending || elegiveis.length === 0 || selectedUserIds.length === 0 || planoDistribuicao.length === 0}
+              disabled={assignMutation.isPending || planoDistribuicao.length === 0 || gruposDistribuicao.length === 0}
               onClick={() => assignMutation.mutate()}
             >
               {assignMutation.isPending ? "Distribuindo..." : "Concluir e distribuir"}

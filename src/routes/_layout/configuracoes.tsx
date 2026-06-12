@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DataTable, type Column } from "@/components/app/DataTable";
 import { Plus, Trash2, Pencil } from "lucide-react";
+import { useAuth } from "@/features/auth/AuthContext";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -62,20 +63,23 @@ interface AppUser {
 // --- Page --------------------------------------------------------------------
 
 function ConfigPage() {
+  const { usuario } = useAuth();
+  const isAdmin = usuario?.perfil === "administrador";
+
   return (
-    <ProtectedRoute perfis={["administrador"]}>
+    <ProtectedRoute perfis={["administrador", "supervisor"]}>
       <PageHeader titulo="Configurações" descricao="Parâmetros de negócio e regras do sistema" />
       <Tabs defaultValue="parametros">
         <TabsList className="mb-4">
           <TabsTrigger value="parametros">Parâmetros</TabsTrigger>
           <TabsTrigger value="regras">Regras de Ignorar</TabsTrigger>
           <TabsTrigger value="integracoes">Integrações</TabsTrigger>
-          <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+          {isAdmin && <TabsTrigger value="usuarios">Usuários</TabsTrigger>}
         </TabsList>
         <TabsContent value="parametros"><ParametrosTab /></TabsContent>
         <TabsContent value="regras"><RegrasTab /></TabsContent>
         <TabsContent value="integracoes"><IntegracoesTab /></TabsContent>
-        <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
+        {isAdmin && <TabsContent value="usuarios"><UsuariosTab /></TabsContent>}
       </Tabs>
     </ProtectedRoute>
   );

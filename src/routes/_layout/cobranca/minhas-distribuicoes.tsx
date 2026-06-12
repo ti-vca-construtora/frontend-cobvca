@@ -6,6 +6,7 @@ import { ProtectedRoute } from "@/components/app/ProtectedRoute";
 import { DataTable, type Column } from "@/components/app/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,36 @@ interface AssignedChargeItem {
   feedback_notes: string | null;
   assigned_to_user_id: string | null;
   assigned_at: string | null;
+  datacharge_items?: ChargeInstallment[];
+}
+
+interface ChargeBatch {
+  id: string;
+  batch_code: string;
+  status: string;
+  created_at: string;
+}
+
+interface ChargeInstallment {
+  id?: string;
+  valor: number | null;
+  tipo_parcela: string | null;
+  dias_vencidos: number | null;
+  data_vencimento: string | null;
+}
+
+interface GroupedChargeItem {
+  id: string;
+  bill_id: string;
+  client_name: string | null;
+  document: string | null;
+  enterprise_name: string | null;
+  due_date: string | null;
+  amount: number | null;
+  status: ChargeStatus | "misto";
+  feedback_notes: string | null;
+  items: AssignedChargeItem[];
+  installments: ChargeInstallment[];
 }
 
 const STATUS_LABEL: Record<ChargeStatus, string> = {
@@ -47,7 +78,7 @@ const STATUS_LABEL: Record<ChargeStatus, string> = {
   sem_retorno: "Sem retorno",
   em_atendimento: "Em atendimento",
   ciente_sem_retorno: "Ciente s/ retorno",
-  em_negociacao: "Em negociacao",
+  em_negociacao: "Em negociação",
   acordo: "Acordo",
   pago: "Pago",
   cancelado: "Cancelado",
@@ -57,26 +88,42 @@ function MinhasDistribuicoesPage() {
   const { usuario } = useAuth();
   const queryClient = useQueryClient();
   const [busca, setBusca] = useState("");
+  const [mostrarSomenteMinhas, setMostrarSomenteMinhas] = useState(true);
+  const [statusFiltro, setStatusFiltro] = useState<ChargeStatus | "todos">("todos");
+  const [processoFiltro, setProcessoFiltro] = useState("todos");
   const [itemEmEdicao, setItemEmEdicao] = useState<AssignedChargeItem | null>(null);
+  const [grupoParcelas, setGrupoParcelas] = useState<GroupedChargeItem | null>(null);
+
+  const { data: processos = [] } = useQuery<ChargeBatch[]>({
+    queryKey: ["charge-batches"],
+    queryFn: () => api.get<ChargeBatch[]>("/charges"),
+    staleTime: 1000 * 60,
+  });
 
   const { data: items = [], isLoading } = useQuery<AssignedChargeItem[]>({
-    queryKey: ["minhas-distribuicoes", usuario?.userId],
-    queryFn: () => api.get<AssignedChargeItem[]>("/charges/items", { assignedToUserId: usuario?.userId }),
+    queryKey: ["minhas-distribuicoes", usuario?.userId, mostrarSomenteMinhas, statusFiltro, processoFiltro],
+    queryFn: () => api.get<AssignedChargeItem[]>("/charges/items", {
+      assignedToUserId: mostrarSomenteMinhas ? usuario?.userId : undefined,
+      status: statusFiltro === "todos" ? undefined : statusFiltro,
+      batchId: processoFiltro === "todos" ? undefined : processoFiltro,
+    }),
     enabled: !!usuario?.userId,
   });
 
+  const agrupados = useMemo(() => groupAssignedItems(items), [items]);
+
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    if (!termo) return items;
-    return items.filter((item) =>
+    if (!termo) return agrupados;
+    return agrupados.filter((item) =>
       (item.client_name ?? "").toLowerCase().includes(termo) ||
       (item.document ?? "").toLowerCase().includes(termo) ||
       (item.enterprise_name ?? "").toLowerCase().includes(termo) ||
       (item.bill_id ?? "").toLowerCase().includes(termo),
     );
-  }, [items, busca]);
+  }, [agrupados, busca]);
 
-  const columns: Column<AssignedChargeItem>[] = [
+  const columns: Column<GroupedChargeItem>[] = [
     {
       key: "cliente",
       header: "Cliente",
@@ -87,7 +134,7 @@ function MinhasDistribuicoesPage() {
         </div>
       ),
     },
-    { key: "titulo", header: "Titulo", accessor: (r) => r.bill_id ?? "-" },
+    { key: "titulo", header: "Título", accessor: (r) => r.bill_id ?? "-" },
     { key: "empreendimento", header: "Empreendimento", accessor: (r) => r.enterprise_name ?? "-" },
     {
       key: "valor",
@@ -98,6 +145,11 @@ function MinhasDistribuicoesPage() {
           : "-",
     },
     {
+      key: "parcelas",
+      header: "Parcelas",
+      render: (r) => <Badge variant="outline">{r.installments.length}</Badge>,
+    },
+    {
       key: "vencimento",
       header: "Vencimento",
       render: (r) => (r.due_date ? new Date(r.due_date).toLocaleDateString("pt-BR") : "-"),
@@ -105,39 +157,101 @@ function MinhasDistribuicoesPage() {
     {
       key: "status",
       header: "Status",
-      render: (r) => <Badge variant={r.status === "cancelado" ? "destructive" : "secondary"}>{STATUS_LABEL[r.status]}</Badge>,
+      render: (r) => (
+        <Badge variant={r.status === "cancelado" ? "destructive" : "secondary"}>
+          {r.status === "misto" ? "Misto" : STATUS_LABEL[r.status]}
+        </Badge>
+      ),
     },
     {
       key: "acao",
-      header: "Acao",
-      render: (r) => (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={(e) => {
-            e.stopPropagation();
-            setItemEmEdicao(r);
-          }}
-        >
-          Atualizar
-        </Button>
-      ),
+      header: "Ação",
+      render: (r) => {
+        const meuItem = r.items.find((item) => item.assigned_to_user_id === usuario?.userId);
+
+        return (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                setGrupoParcelas(r);
+              }}
+            >
+              Ver parcelas
+            </Button>
+            {meuItem && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setItemEmEdicao(meuItem);
+                }}
+              >
+                Atualizar
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <ProtectedRoute perfis={["administrador", "supervisor", "cobrador"]}>
       <PageHeader
-        titulo="Minhas Distribuicoes"
-        descricao="Clientes e titulos distribuidos para voce"
+        titulo="Minhas Distribuições"
+        descricao="Clientes e títulos distribuídos para você"
       />
 
-      <div className="mb-4 max-w-sm">
-        <Input
-          placeholder="Buscar por cliente, documento, titulo..."
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
+      <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_220px_240px_auto] lg:items-end">
+        <div className="max-w-sm flex-1">
+          <Label className="mb-1 block text-xs text-muted-foreground">Busca</Label>
+          <Input
+            placeholder="Buscar por cliente, documento, título..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Status</Label>
+          <Select value={statusFiltro} onValueChange={(value) => setStatusFiltro(value as ChargeStatus | "todos")}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os status</SelectItem>
+              {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Processo</Label>
+          <Select value={processoFiltro} onValueChange={setProcessoFiltro}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os processos</SelectItem>
+              {processos.map((processo) => (
+                <SelectItem key={processo.id} value={processo.id}>
+                  {processo.batch_code}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Label className="flex cursor-pointer items-center gap-2 pb-2 text-sm font-normal">
+          <Checkbox
+            checked={mostrarSomenteMinhas}
+            onCheckedChange={(checked) => setMostrarSomenteMinhas(checked === true)}
+          />
+          Minhas distribuições
+        </Label>
       </div>
 
       {isLoading ? (
@@ -157,7 +271,126 @@ function MinhasDistribuicoesPage() {
           }}
         />
       )}
+      {grupoParcelas && (
+        <ParcelasDialog grupo={grupoParcelas} onClose={() => setGrupoParcelas(null)} />
+      )}
     </ProtectedRoute>
+  );
+}
+
+function baseBillId(billId: string | null | undefined) {
+  return (billId ?? "-").replace(/#\d+$/, "");
+}
+
+function getInstallments(item: AssignedChargeItem): ChargeInstallment[] {
+  if (Array.isArray(item.datacharge_items) && item.datacharge_items.length > 0) {
+    return item.datacharge_items;
+  }
+
+  return [{
+    valor: item.amount,
+    tipo_parcela: null,
+    dias_vencidos: null,
+    data_vencimento: item.due_date,
+  }];
+}
+
+function groupAssignedItems(items: AssignedChargeItem[]): GroupedChargeItem[] {
+  const groups = new Map<string, GroupedChargeItem>();
+
+  for (const item of items) {
+    const billId = baseBillId(item.bill_id);
+    const key = `${item.client_name ?? ""}|${item.document ?? ""}|${billId}`;
+    const installments = getInstallments(item);
+    const current = groups.get(key);
+
+    if (!current) {
+      groups.set(key, {
+        id: key,
+        bill_id: billId,
+        client_name: item.client_name,
+        document: item.document,
+        enterprise_name: item.enterprise_name,
+        due_date: item.due_date,
+        amount: item.amount ?? 0,
+        status: item.status,
+        feedback_notes: item.feedback_notes,
+        items: [item],
+        installments: [...installments],
+      });
+      continue;
+    }
+
+    current.items.push(item);
+    current.installments.push(...installments);
+    current.amount = (current.amount ?? 0) + (item.amount ?? 0);
+    current.due_date = current.due_date ?? item.due_date;
+    current.status = current.status === item.status ? current.status : "misto";
+  }
+
+  return Array.from(groups.values());
+}
+
+function ParcelasDialog({ grupo, onClose }: { grupo: GroupedChargeItem; onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Parcelas do título {grupo.bill_id}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 text-sm">
+          <div className="rounded-md border p-3">
+            <p className="font-medium">{grupo.client_name ?? "-"}</p>
+            <p className="text-xs text-muted-foreground">{grupo.document ?? "sem documento"}</p>
+            <p className="text-xs text-muted-foreground">{grupo.enterprise_name ?? "-"}</p>
+          </div>
+
+          <DataTable
+            data={grupo.installments.map((installment, index) => ({
+              id: installment.id ?? `${grupo.id}-${index}`,
+              numero: index + 1,
+              ...installment,
+            }))}
+            pageSize={10}
+            columns={[
+              {
+                key: "numero",
+                header: "Parcela",
+                accessor: (row) => row.numero,
+              },
+              {
+                key: "tipo",
+                header: "Tipo",
+                accessor: (row) => row.tipo_parcela ?? "-",
+              },
+              {
+                key: "vencimento",
+                header: "Vencimento",
+                render: (row) => (row.data_vencimento ? new Date(row.data_vencimento).toLocaleDateString("pt-BR") : "-"),
+              },
+              {
+                key: "dias",
+                header: "Dias",
+                accessor: (row) => row.dias_vencidos ?? 0,
+              },
+              {
+                key: "valor",
+                header: "Valor",
+                render: (row) =>
+                  row.valor != null
+                    ? row.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                    : "-",
+              },
+            ]}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -178,7 +411,7 @@ function AtualizarStatusDialog({
       if (status === "cancelado" && !motivo.trim()) {
         throw new Error("Informe o motivo do cancelamento.");
       }
-      await api.patch(`/charges/items/${item.id}/feedback`, {
+      await api.patch(`/charges/items/${item.id}/status`, {
         status,
         feedbackNotes: motivo.trim() || undefined,
       });
@@ -205,7 +438,7 @@ function AtualizarStatusDialog({
           <div className="rounded-md border p-3">
             <p className="font-medium">{item.client_name ?? "-"}</p>
             <p className="text-muted-foreground text-xs">{item.document ?? "sem documento"}</p>
-            <p className="text-muted-foreground text-xs">Titulo: {item.bill_id}</p>
+            <p className="text-muted-foreground text-xs">Título: {item.bill_id}</p>
           </div>
 
           <div className="space-y-1">
@@ -217,7 +450,7 @@ function AtualizarStatusDialog({
                 <SelectItem value="sem_retorno">Sem retorno</SelectItem>
                 <SelectItem value="em_atendimento">Em atendimento</SelectItem>
                 <SelectItem value="ciente_sem_retorno">Ciente s/ retorno</SelectItem>
-                <SelectItem value="em_negociacao">Em negociacao</SelectItem>
+                <SelectItem value="em_negociacao">Em negociação</SelectItem>
                 <SelectItem value="acordo">Acordo</SelectItem>
                 <SelectItem value="pago">Pago</SelectItem>
                 <SelectItem value="cancelado">Cancelado</SelectItem>
@@ -226,10 +459,10 @@ function AtualizarStatusDialog({
           </div>
 
           <div className="space-y-1">
-            <Label>{status === "cancelado" ? "Motivo do cancelamento" : "Observacoes"}</Label>
+            <Label>{status === "cancelado" ? "Motivo do cancelamento" : "Observações"}</Label>
             <Textarea
               rows={4}
-              placeholder={status === "cancelado" ? "Informe o motivo do cancelamento..." : "Observacoes da tratativa..."}
+              placeholder={status === "cancelado" ? "Informe o motivo do cancelamento..." : "Observações da tratativa..."}
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
             />
